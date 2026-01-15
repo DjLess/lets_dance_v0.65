@@ -269,7 +269,9 @@
         <h3 style="color:var(--accent-color)">SISTEMA_V3_CORE</h3>
         <div class="debug-group"><label>NPC_COUNT</label><input type="range" id="input-npc" min="1" max="60" value="15"></div>
         <div class="debug-group"><label>FOLLOW_RAD</label><input type="range" id="input-follow" min="3" max="30" value="9"></div>
-        <div class="debug-group"><label>SYNC_TOLERANCE</label><input type="range" id="input-tol" min="50" max="300" value="150"></div>
+        <div class="debug-group"><label>SYNC_TOLERANCE</label><input type="range" id="input-tol" min="50" max="300" value="100"></div>
+        <div class="debug-group"><label>NOTE_SPEED</label><input type="range" id="input-note-speed" min="600" max="1500" step="50" value="900"></div>
+        <div class="debug-group"><label>TIMING_WINDOW</label><input type="range" id="input-note-window" min="0.5" max="0.95" step="0.05" value="0.75"></div>
         <div class="debug-group"><label>MANUAL_BPM</label><input type="range" id="input-bpm" min="60" max="250" value="120"></div>
         <div class="debug-group"><label>COLLISION_SYSTEM</label><input type="checkbox" id="check-collision" checked></div>
         <button class="btn" style="border-color:#500; color:#f55; margin-top:10px;" onclick="reiniciarEscena()">_FORCE_RESET_SYSTEM</button>
@@ -329,7 +331,7 @@
 
         // --- STATE ---
         let canvas, ctx, kick, snare;
-        let config = { grid: 20, bpm: 120, tolerance: 150, collision: true, npcCount: 25, followRadius: 9, kickType: 'deep', showHints: true, snareEnabled: true };
+        let config = { grid: 20, bpm: 120, tolerance: 100, collision: true, npcCount: 25, followRadius: 9, kickType: 'deep', showHints: true, snareEnabled: true, noteSpeed: 900, noteWindow: 0.75 };
         let appearance = { dj: true, barman: true, sofas: true, tables: true, screens: true, lasers: true, sidebars: true, smoking: true, wc: true, avatar: '(⌐■_■)', playerGlow: true };
         let currentStatus = { type: null, label: 'NONE', beats: 0, maxBeats: 0 };
         let player = { x: 5, y: 5 }, npcs = [], obstacles = [], activeNotes = [], activePowerUpsOnMap = [], puConfig = {};
@@ -386,6 +388,16 @@
                 // Only create normal note if NOT in double_tempo mode (double_tempo uses its own loop)
                 if (currentStatus.type !== 'double_tempo') {
                     crearNota(false);
+                }
+                // Penalización: Si hay demasiadas notas acumuladas, resetear combo
+                if (activeNotes.length > 3) {
+                    combo = 0;
+                    document.getElementById('combo-counter').innerText = "000";
+                    document.getElementById('accuracy-feedback').innerText = "OVERLOAD";
+                    document.getElementById('accuracy-feedback').style.color = "var(--miss)";
+                    // Eliminar todas las notas acumuladas
+                    activeNotes.forEach(note => note.el.remove());
+                    activeNotes = [];
                 }
                 canMove = true;
                 // #region agent log
@@ -585,7 +597,10 @@
     fetch('http://127.0.0.1:7242/ingest/8e398c92-5a00-4d2e-8c26-bde5f94162b8',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'crearNota:afterPush',message:'Note added to array',data:{activeNotesCount:activeNotes.length,objId:obj.el.id||'no-id',isDoubleTempo},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
     // #endregion
 
-    const anim = el.animate([{left:'450px'}, {left:'30px', offset:0.9}, {left:'-50px'}], {duration:1200});
+    // Velocidad de nota ajustable (más rápido = más difícil)
+    const noteDuration = config.noteSpeed || 900;
+    const noteWindow = config.noteWindow || 0.75; // Ventana de timing más pequeña (75% en lugar de 90%)
+    const anim = el.animate([{left:'450px'}, {left:'30px', offset:noteWindow}, {left:'-50px'}], {duration:noteDuration});
 
     anim.onfinish = () => {
         // #region agent log
@@ -697,6 +712,29 @@
     }
     
     const n = activeNotes[0];
+    
+    // Verificar timing: la nota debe estar cerca del target (ventana de timing más estricta)
+    const noteRect = n.el.getBoundingClientRect();
+    const targetRect = document.getElementById('beat-target').getBoundingClientRect();
+    const noteLeft = noteRect.left;
+    const targetLeft = targetRect.left;
+    const distance = Math.abs(noteLeft - targetLeft);
+    const maxDistance = 60; // Distancia máxima permitida (más estricto que antes)
+    
+    // Si la nota está demasiado lejos del target, es un error de timing
+    if (distance > maxDistance) {
+        // #region agent log
+        fetch('http://127.0.0.1:7242/ingest/8e398c92-5a00-4d2e-8c26-bde5f94162b8',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'keydown:timingError',message:'Timing error - too early/late',data:{distance,maxDistance,combo},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+        // #endregion
+        combo = 0;
+        document.getElementById('combo-counter').innerText = "000";
+        document.getElementById('accuracy-feedback').innerText = "TIMING_ERROR";
+        document.getElementById('accuracy-feedback').style.color = "var(--miss)";
+        n.el.remove();
+        activeNotes.shift();
+        canMove = false;
+        return;
+    }
     let k = e.key;
 
     // Lógica de Power-Ups de tu código original
@@ -725,8 +763,18 @@
         // #endregion
         document.getElementById('combo-counter').innerText = combo.toString().padStart(3, '0');
         
-        document.getElementById('accuracy-feedback').innerText = "PERFECT!";
-        document.getElementById('accuracy-feedback').style.color = "var(--excellent)";
+        // Feedback de precisión basado en qué tan cerca está la nota del target
+        const timingAccuracy = 1 - (distance / maxDistance);
+        if (timingAccuracy > 0.9) {
+            document.getElementById('accuracy-feedback').innerText = "PERFECT!";
+            document.getElementById('accuracy-feedback').style.color = "var(--excellent)";
+        } else if (timingAccuracy > 0.7) {
+            document.getElementById('accuracy-feedback').innerText = "GREAT!";
+            document.getElementById('accuracy-feedback').style.color = "var(--great)";
+        } else {
+            document.getElementById('accuracy-feedback').innerText = "GOOD";
+            document.getElementById('accuracy-feedback').style.color = "var(--good)";
+        }
         
         // Eliminar nota y bloquear hasta siguiente beat
         n.el.remove(); 
@@ -814,6 +862,12 @@
         bind('input-bpm', config, 'bpm', () => Tone.Transport.bpm.value = config.bpm);
         bind('input-follow', config, 'followRadius');
         bind('input-tol', config, 'tolerance');
+        bind('input-note-speed', config, 'noteSpeed', () => {
+            // Actualizar velocidad de notas existentes no es posible, pero nuevas notas usarán el nuevo valor
+        });
+        bind('input-note-window', config, 'noteWindow', () => {
+            // Actualizar ventana de timing para nuevas notas
+        });
         bind('input-kick-type', config, 'kickType', updateKickParams);
         bind('input-snare-type', config, 'snareType', () => snare.noise.type = config.snareType);
         bind('check-snare-master', config, 'snareEnabled');
