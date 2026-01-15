@@ -1,0 +1,1171 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Rhythm Grid: Industrial ASCII Club - ULTIMATE CONSOLIDATED V9</title>
+    <style>
+        :root {
+            --bg-color: #050505;
+            --accent-color: #00ff00;
+            --excellent: #00ffff;
+            --great: #adff2f;
+            --good: #ffd700;
+            --miss: #ff4500;
+            --playlist-color: #ff00ff;
+            --powerup-color: #ffff00;
+            --panel-bg: rgba(10, 10, 10, 0.98);
+            --border-color: #333;
+            --terminal-font: 'Courier New', Courier, monospace;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            color: #eee;
+            font-family: var(--terminal-font);
+            display: flex;
+            margin: 0;
+            height: 100vh;
+            overflow: hidden;
+            text-transform: uppercase;
+        }
+
+        #main-view {
+            flex-grow: 1; display: flex; flex-direction: column;
+            align-items: center; justify-content: center; position: relative;
+        }
+
+        /* PANELES LATERALES */
+        .side-panel {
+            position: absolute; top: 0; width: 300px; height: 100%;
+            background: var(--panel-bg); border: 1px solid var(--border-color);
+            padding: 20px; display: none; flex-direction: column;
+            gap: 8px; overflow-y: auto; z-index: 2000; backdrop-filter: blur(8px);
+        }
+        #debug-panel { right: 0; border-left: 1px solid var(--accent-color); }
+        #appearance-panel { left: 0; border-right: 1px solid var(--excellent); }
+        #playlist-panel { left: 320px; border: 1px solid var(--playlist-color); height: auto; top: 20px; border-radius: 5px; }
+        #powerup-panel { right: 320px; border: 1px solid var(--powerup-color); height: auto; top: 20px; border-radius: 5px; }
+
+        .debug-group { 
+            display: flex; flex-direction: column; gap: 4px; 
+            background: #000; padding: 8px; border: 1px solid #222;
+        }
+        .debug-group label { font-size: 9px; letter-spacing: 1px; color: #888; display: flex; justify-content: space-between; align-items: center; }
+
+        h3 { font-size: 11px; margin: 5px 0; letter-spacing: 2px; border-bottom: 1px solid #333; padding-bottom: 5px; color: #fff; }
+
+        /* UI */
+        #ui-layer { text-align: center; margin-bottom: 10px; min-width: 450px; position: relative; z-index: 50; }
+        #combo-counter { font-size: 42px; color: var(--accent-color); font-weight: 900; margin: 0; text-shadow: 0 0 10px var(--accent-color); }
+        #accuracy-feedback { font-size: 12px; letter-spacing: 4px; height: 20px; margin-top: 5px; font-weight: bold; }
+        
+        #status-hud { 
+            font-size: 11px; color: var(--powerup-color); background: rgba(0, 0, 0, 0.9); 
+            padding: 10px; border: 1px solid var(--powerup-color); margin-top: 10px; 
+            display: none; flex-direction: column; align-items: center; gap: 5px;
+        }
+        .progress-bar-container { width: 100%; height: 4px; background: #333; position: relative; }
+        #progress-fill { height: 100%; background: var(--powerup-color); width: 100%; transition: width 0.1s linear; }
+
+        /* JUEGO */
+        #bpm-display { position: absolute; top: 20px; right: 150px; font-size: 24px; color: var(--playlist-color); border: 1px solid var(--playlist-color); padding: 5px 15px; background: rgba(0,0,0,0.5); z-index: 100; }
+        #volume-control { position: absolute; top: 80px; left: 20px; display: flex; flex-direction: column; gap: 5px; background: rgba(0,0,0,0.8); padding: 10px; border: 1px solid #333; z-index: 1000; }
+
+        #game-container { width: 450px; border: 1px solid #333; background: #000; position: relative; transition: transform 0.05s ease-out; }
+        #zona-juego { display: block; width: 450px; height: 350px; }
+        #zona-beat { width: 450px; height: 80px; background: #0a0a0a; border-top: 2px solid #222; position: relative; overflow: hidden; }
+        #beat-target { position: absolute; left: 30px; top: 50%; transform: translateY(-50%); width: 40px; height: 40px; border: 2px solid #444; }
+        .note { position: absolute; top: 50%; transform: translateY(-50%); width: 25px; height: 25px; background: white; display: flex; align-items: center; justify-content: center; color: #000; font-weight: bold; }
+        .inverted { filter: invert(1) hue-rotate(180deg); }
+
+        /* BOTONES Y INPUTS */
+        .btn { padding: 8px; font-weight: bold; cursor: pointer; border: 1px solid #444; background: #111; color: #eee; font-family: var(--terminal-font); font-size: 10px; }
+        .btn:hover { background: #222; border-color: #888; }
+        .menu-toggle { position: absolute; top: 20px; background: rgba(0,0,0,0.8); border: 1px solid #333; color: #777; z-index: 1500; }
+        input[type="range"], select { background: #000; color: #fff; border: 1px solid #333; }
+
+        /* OVERLAY INICIAL */
+        #start-overlay {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.96); z-index: 3000;
+            display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 15px;
+            backdrop-filter: blur(10px); padding: 20px;
+        }
+        #pre-game-pu-list {
+            display: grid; grid-template-columns: 1fr 1fr; gap: 8px; width: 620px;
+            background: #111; padding: 20px; border: 1px solid #444;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="bpm-display">BPM: 120</div>
+
+    <div id="volume-control">
+        <label style="font-size:8px; color:var(--accent-color)">MASTER_VOL</label>
+        <input type="range" id="input-volume" min="-60" max="0" value="-10">
+    </div>
+
+    <button id="open-appearance" class="btn menu-toggle" style="left:20px;">[ DISEÑO_ASCII ]</button>
+    <button id="open-playlist" class="btn menu-toggle" style="left:170px;">[ PLAYLIST_PRO ]</button>
+    <button id="open-powerups" class="btn menu-toggle" style="right:170px; border-color: var(--powerup-color);">[ POWER_UPS ]</button>
+    <button id="open-debug" class="btn menu-toggle" style="right:20px;">[ SISTEMA_CORE ]</button>
+
+    <div id="appearance-panel" class="side-panel">
+        <button id="close-appearance" class="btn">_CERRAR_</button>
+        <h3 style="color:var(--excellent)">VISUAL_CONFIG</h3>
+        <div class="debug-group"><label>GRID_SIZE</label><input type="range" id="input-grid" min="16" max="64" step="2" value="32"></div>
+        <div class="debug-group"><label>USER_AVATAR</label><select id="user-avatar"><option value="(⌐■_■)">COOL</option><option value="(^o^)">HYPE</option><option value="(◕‿◕)">KAWAII</option><option value="d(-_-)b">DJ_SET</option></select></div>
+        <div class="debug-group"><label>RHYTHM_HINTS</label><input type="checkbox" id="check-hints" checked></div>
+        <div class="debug-group"><label>PLAYER_GLOW</label><input type="checkbox" id="check-player-glow" checked></div>
+        
+        <h3 style="color:var(--good)">CLUB_DECOR (OBJECTS)</h3>
+        <div class="debug-group"><label>DJ_BOOTH</label><input type="checkbox" id="check-dj" checked></div>
+        <div class="debug-group"><label>BARTENDER</label><input type="checkbox" id="check-barman" checked></div>
+        <div class="debug-group"><label>VIP_SOFAS</label><input type="checkbox" id="check-sofas" checked></div>
+        <div class="debug-group"><label>TABLES</label><input type="checkbox" id="check-tables" checked></div>
+        <div class="debug-group"><label>SCREENS</label><input type="checkbox" id="check-screens" checked></div>
+        <div class="debug-group"><label>LASERS</label><input type="checkbox" id="check-lasers" checked></div>
+        <div class="debug-group"><label>SIDE_BARS</label><input type="checkbox" id="check-sidebars" checked></div>
+        <div class="debug-group"><label>SMOKING_ZONE</label><input type="checkbox" id="check-smoking" checked></div>
+        <div class="debug-group"><label>RESTROOMS</label><input type="checkbox" id="check-wc" checked></div>
+    </div>
+
+    <div id="playlist-panel" class="side-panel">
+        <button id="close-playlist" class="btn">_CERRAR_</button>
+        <h3 style="color:var(--playlist-color)">AUDIO_SYNC_PRO</h3>
+        <div class="debug-group"><label>AUTO_BPM</label><input type="checkbox" id="playlist-auto-bpm" checked></div>
+        <div class="debug-group"><label>CHANGE_FREQ</label><input type="range" id="input-pl-freq" min="4" max="64" step="4" value="16"></div>
+        <div class="debug-group"><label>KICK_TYPE</label><select id="input-kick-type"><option value="deep">DEEP_SUB</option><option value="tight">TIGHT_POP</option><option value="electro">ELECTRO</option></select></div>
+        <div class="debug-group"><label>SNARE_TYPE</label><select id="input-snare-type"><option value="white">WHITE_NOISE</option><option value="brown">BROWN_HEAVY</option><option value="pink">PINK_SHARP</option></select></div>
+        <div class="debug-group"><label>SNARE_ENABLED</label><input type="checkbox" id="check-snare-master" checked></div>
+    </div>
+
+    <div id="powerup-panel" class="side-panel">
+        <button id="close-powerup" class="btn">_CERRAR_</button>
+        <h3 style="color:var(--powerup-color)">POWER_UP_CONFIG</h3>
+        <div id="pu-controls-container"></div>
+    </div>
+
+    <div id="debug-panel" class="side-panel">
+        <button id="close-debug" class="btn">_CERRAR_</button>
+        <h3 style="color:var(--accent-color)">SISTEMA_V3_CORE</h3>
+        <div class="debug-group"><label>NPC_COUNT</label><input type="range" id="input-npc" min="1" max="60" value="15"></div>
+        <div class="debug-group"><label>FOLLOW_RAD</label><input type="range" id="input-follow" min="3" max="30" value="9"></div>
+        <div class="debug-group"><label>SYNC_TOLERANCE</label><input type="range" id="input-tol" min="50" max="300" value="150"></div>
+        <div class="debug-group"><label>MANUAL_BPM</label><input type="range" id="input-bpm" min="60" max="250" value="120"></div>
+        <div class="debug-group"><label>COLLISION_SYSTEM</label><input type="checkbox" id="check-collision" checked></div>
+        <button class="btn" style="border-color:#500; color:#f55; margin-top:10px;" onclick="reiniciarEscena()">_FORCE_RESET_SYSTEM</button>
+    </div>
+
+    <div id="main-view">
+        <div id="start-overlay">
+            <h1 style="color:var(--accent-color); letter-spacing: 5px;">RHYTHM_GRID_ULTIMATE</h1>
+            <div id="objective-box" style="font-size: 10px; color: #888; text-align: center; max-width: 500px; border: 1px solid #333; padding: 10px;">
+                MANTÉN EL RITMO PARA LLEVAR A LOS NPC AL CORRAL AZUL. <br>
+                CONFIGURA LOS EFECTOS DE POWER-UPS ANTES DE EMPEZAR.
+            </div>
+            <div id="pre-game-pu-list"></div>
+            <div style="display:flex; gap:10px;">
+                <button id="btn-random-pu" class="btn" style="border-color:var(--powerup-color)">RANDOMIZE_PU</button>
+                <button id="start-btn" class="btn" style="color:var(--accent-color); font-size: 16px; border-color: var(--accent-color); padding: 15px 40px;">INITIALIZE_SESSION</button>
+            </div>
+        </div>
+
+        <div id="ui-layer">
+            <div id="combo-counter">000</div>
+            <div id="accuracy-feedback">SYSTEM_READY</div>
+            <div id="status-hud">
+                <div id="status-label">EFFECT: NONE</div>
+                <div class="progress-bar-container"><div id="progress-fill"></div></div>
+            </div>
+        </div>
+        
+        <div id="game-container">
+            <canvas id="zona-juego" width="450" height="350"></canvas>
+            <div id="zona-beat"><div id="beat-target"></div></div>
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>
+    <script>
+        // --- DATA & CONSTANTS ---
+        const EFFECTS_LIST = {
+            invert_controls: "CONTROLES INVERTIDOS",
+            pause_beat: "SKIP_BEAT (8/8)",
+            double_tempo: "DOUBLE_STEP (X2)",
+            shake_screen: "MAREO (TEMBLOR)",
+            tilt_screen: "MAREO (TILT)",
+            invert_colors: "EPILEPSIA (FLASH)",
+            off_beat: "OFF-BEAT CHALLENGE"
+        };
+
+        const PU_TYPES = {
+            'DRINK':  { char: '🍹', def: 'invert_controls', color: '#ff4444', desc: "Invierte flechas." },
+            'CIGS':   { char: '🚬', def: 'pause_beat', color: '#aaaaaa', desc: "Beat 8 vacío." },
+            'PILL':   { char: '💊', def: 'double_tempo', color: '#00ffff', desc: "Salto doble." },
+            'WEED':   { char: '🌿', def: 'tilt_screen', color: '#00ff00', desc: "Pantalla torcida." },
+            'SHADES': { char: '🕶️', def: 'invert_colors', color: '#ffffff', desc: "Efecto flash." },
+            'MUSH':   { char: '🍄', def: 'off_beat', color: '#ff00ff', desc: "Doble nota." },
+            'WATER':  { char: '💧', def: 'shake_screen', color: '#3333ff', desc: "Terremoto visual." }
+        };
+
+        // --- STATE ---
+        let canvas, ctx, kick, snare;
+        let config = { grid: 20, bpm: 120, tolerance: 150, collision: true, npcCount: 25, followRadius: 9, kickType: 'deep', showHints: true, snareEnabled: true };
+        let appearance = { dj: true, barman: true, sofas: true, tables: true, screens: true, lasers: true, sidebars: true, smoking: true, wc: true, avatar: '(⌐■_■)', playerGlow: true };
+        let currentStatus = { type: null, label: 'NONE', beats: 0, maxBeats: 0 };
+        let player = { x: 5, y: 5 }, npcs = [], obstacles = [], activeNotes = [], activePowerUpsOnMap = [], puConfig = {};
+        let blueZone = { x: 14, y: 13, w: 8, h: 8 };
+        let combo = 0, isStarted = false, beatCounter = 0, canMove = false, djStep = 0;
+
+        // --- INITIALIZATION ---
+        window.onload = () => {
+            canvas = document.getElementById('zona-juego');
+            ctx = canvas.getContext('2d');
+            Object.keys(PU_TYPES).forEach(id => {
+                puConfig[id] = { effect: PU_TYPES[id].def, rate: 15, dur: 16, last: Date.now(), enabled: true };
+            });
+            renderPreGameMenu();
+            initPowerUpMenu();
+            generarLayout();
+            reiniciarEscena();
+            requestAnimationFrame(draw);
+        };
+
+        // --- AUDIO ENGINE ---
+        function updateKickParams() {
+            if (config.kickType === 'deep') kick.set({ pitchDecay: 0.08, octaves: 5 });
+            else if (config.kickType === 'tight') kick.set({ pitchDecay: 0.02, octaves: 2 });
+            else kick.set({ pitchDecay: 0.1, octaves: 10 });
+        }
+
+        const loop = new Tone.Loop((time) => {
+            const isPause = (currentStatus.type === 'pause_beat' && (beatCounter+1)%8 === 0);
+            if (!isPause) {
+                kick.triggerAttackRelease("C1", "8n", time);
+                if (currentStatus.type === 'off_beat') {
+                    Tone.Draw.schedule(() => crearNota(true), time + Tone.Time("8n").toSeconds());
+                }
+            }
+            if (config.snareEnabled) snare.triggerAttackRelease("16n", time + Tone.Time("8n").toSeconds());
+
+            Tone.Draw.schedule(() => {
+                beatCounter++;
+                updateHUD();
+                if (isStarted) spawnPowerUps();
+                if (beatCounter % 16 === 0 && document.getElementById('playlist-auto-bpm').checked) autoAdjustBpm();
+                djStep = (djStep + 1) % 2;
+                actualizarNPCs(true);
+                crearNota(false);
+                canMove = true;
+            }, time);
+        }, "4n");
+
+        function autoAdjustBpm() {
+            config.bpm = Math.min(Math.max(parseInt(config.bpm) + (Math.random() > 0.5 ? 5 : -5), 60), 220);
+            Tone.Transport.bpm.rampTo(config.bpm, 1);
+            document.getElementById('bpm-display').innerText = `BPM: ${Math.round(config.bpm)}`;
+        }
+
+        // --- CORE LOGIC ---
+        function generarLayout() {
+            obstacles = []; const g = config.grid;
+            blueZone = { x: Math.floor(g*0.4), y: Math.floor(g*0.4), w: Math.floor(g*0.2)+2, h: Math.floor(g*0.2)+2 };
+            
+            if (appearance.dj) obstacles.push({x: Math.floor(g/2), y: 1, type: 'dj'});
+            if (appearance.barman) obstacles.push({x: g-3, y: Math.floor(g/2), char: '(ಠ_ಠ)旦', color: '#aaa'});
+            if (appearance.sofas) {
+                for(let i=2; i<6; i++) obstacles.push({x: i, y: g-3, char: 'TTT', color: '#444'});
+            }
+            if (appearance.tables) {
+                obstacles.push({x: 3, y: g-5, char: '┬─┬', color: '#333'});
+            }
+            if (appearance.screens) {
+                obstacles.push({x: Math.floor(g*0.2), y: 0, char: '[REC]', color: '#500'});
+                obstacles.push({x: Math.floor(g*0.8), y: 0, char: '[REC]', color: '#500'});
+            }
+            if (appearance.sidebars) {
+                for(let y=Math.floor(g*0.3); y<Math.floor(g*0.7); y++) obstacles.push({x: 1, y: y, char: '▒', color: '#222'});
+            }
+            if (appearance.smoking) obstacles.push({x: g-4, y: g-3, char: '(SS)', color: '#666'});
+            if (appearance.wc) obstacles.push({x: 1, y: g-2, char: '[WC]', color: '#fff'});
+        }
+
+        function isOccupied(x, y) {
+            if (x < 0 || x >= config.grid || y < 0 || y >= config.grid) return true;
+            if (config.collision && obstacles.some(o => o.x === x && o.y === y)) return true;
+            return false;
+        }
+
+// === CORRAL HELPER: CHECK IF TILE IS INSIDE BLUE ZONE ===
+        function isInsideBlueZone(x, y) {
+            return (
+                x >= blueZone.x &&
+                x < blueZone.x + blueZone.w &&
+                y >= blueZone.y &&
+                y < blueZone.y + blueZone.h
+            );
+        }
+
+
+        function reiniciarEscena() {
+            player = { x: 2, y: 2 }; npcs = [];
+            for(let i=0; i<config.npcCount; i++) {
+                let x, y; do { x = Math.floor(Math.random()*config.grid); y = Math.floor(Math.random()*config.grid); } while(isOccupied(x, y));
+                npcs.push({ x, y, color: 'red', char: '(ಠ_ಠ)', dir: 1 });
+            }
+            activePowerUpsOnMap = [];
+        }
+
+        function spawnPowerUps() {
+            const now = Date.now();
+            Object.keys(puConfig).forEach(id => {
+                if (puConfig[id].enabled && (now - puConfig[id].last > puConfig[id].rate * 1000)) {
+                    let x, y; do { x=Math.floor(Math.random()*config.grid); y=Math.floor(Math.random()*config.grid); } while(isOccupied(x,y));
+                    activePowerUpsOnMap.push({ x, y, id });
+                    puConfig[id].last = now;
+                }
+            });
+        }
+
+        function actualizarNPCs(onKick) {
+            npcs.forEach(n => {
+                const inZone = (n.x >= blueZone.x && n.x < blueZone.x+blueZone.w && n.y >= blueZone.y && n.y < blueZone.y+blueZone.h);
+                if(inZone) {
+    n.color = '#0ff';
+    n.char = '(*^ω^*)';
+
+    if (onKick && Math.random() > 0.6) {
+        const d = [[1,0],[-1,0],[0,1],[0,-1]][Math.floor(Math.random()*4)];
+        const nx = n.x + d[0];
+        const ny = n.y + d[1];
+
+        // NPCs can move ONLY inside the corral once trapped
+        if (
+            !isOccupied(nx, ny) &&
+            isInsideBlueZone(nx, ny)
+        ) {
+            n.x = nx;
+            n.y = ny;
+            n.dir = d[0] || n.dir;
+        }
+    }
+} else if(onKick && Math.sqrt(Math.pow(n.x-player.x,2)+Math.pow(n.y-player.y,2)) < config.followRadius) {
+                    n.color='#ffa500'; n.char='(•_•)>';
+                    let dx = n.x < player.x ? 1 : (n.x > player.x ? -1 : 0);
+                    let dy = n.y < player.y ? 1 : (n.y > player.y ? -1 : 0);
+                    if(!isOccupied(n.x+dx, n.y+dy)) { n.x+=dx; n.y+=dy; n.dir=dx||n.dir; }
+                } else { n.color='red'; n.char='(ಠ_ಠ)'; }
+            });
+        }
+
+        function crearNota(isOffbeat) {
+            if(!isStarted) return;
+            const el = document.createElement('div'); el.className = 'note';
+            if(isOffbeat) { el.style.border = "2px solid var(--excellent)"; el.style.height = "12px"; }
+            document.getElementById('zona-beat').appendChild(el);
+            const anim = el.animate([{left:'450px'}, {left:'30px', offset:0.9}, {left:'-50px'}], {duration:1200});
+            const obj = { el, isOffbeat }; activeNotes.push(obj);
+            anim.onfinish = () => { if(activeNotes.includes(obj)) { combo=0; activeNotes.shift(); } el.remove(); };
+        }
+
+        function updateHUD() {
+            if (currentStatus.beats > 0) {
+                currentStatus.beats--;
+                document.getElementById('status-hud').style.display = 'flex';
+                document.getElementById('status-label').innerText = `EFECTO: ${currentStatus.label}`;
+                document.getElementById('progress-fill').style.width = (currentStatus.beats / currentStatus.maxBeats * 100) + "%";
+                if (currentStatus.type === 'invert_colors' && beatCounter % 2 === 0) document.getElementById('game-container').classList.toggle('inverted');
+                if (currentStatus.type === 'shake_screen') {
+                    const i = 10; document.getElementById('game-container').style.transform = `translate(${(Math.random()-0.5)*i}px, ${(Math.random()-0.5)*i}px)`;
+                }
+                if (currentStatus.type === 'tilt_screen') { document.getElementById('game-container').style.transform = `rotate(${Math.sin(beatCounter)*5}deg)`; }
+            } else {
+                currentStatus.type = null; document.getElementById('status-hud').style.display = 'none';
+                document.getElementById('game-container').classList.remove('inverted');
+                document.getElementById('game-container').style.transform = 'none';
+            }
+            document.getElementById('combo-counter').innerText = combo.toString().padStart(3, '0');
+        }
+
+        // --- RENDER ---
+        function draw() {
+            const cw = 450/config.grid, ch = 350/config.grid;
+            ctx.clearRect(0,0,450,350);
+            ctx.fillStyle = "#000"; ctx.fillRect(0,0,450,350);
+
+            // Grid y Corral
+            ctx.fillStyle = "rgba(0, 150, 255, 0.1)";
+            ctx.fillRect(blueZone.x*cw, blueZone.y*ch, blueZone.w*cw, blueZone.h*ch);
+
+            // Lasers (V5)
+            if (appearance.lasers && isStarted && djStep === 0) {
+                ctx.strokeStyle = `hsl(${Math.random()*360}, 100%, 50%)`;
+                ctx.beginPath(); ctx.moveTo(225, 0); ctx.lineTo(Math.random()*450, 350); ctx.stroke();
+            }
+
+            // Power-Ups
+            activePowerUpsOnMap.forEach(p => {
+                const color = PU_TYPES[p.id].color;
+                ctx.strokeStyle = color; ctx.strokeRect(p.x*cw+1, p.y*ch+1, cw-2, ch-2);
+                ctx.fillStyle = color; ctx.font = `${ch*0.8}px Courier`; ctx.textAlign="center";
+                ctx.fillText(PU_TYPES[p.id].char, (p.x+0.5)*cw, (p.y+0.8)*ch);
+            });
+
+            // Decoración
+            ctx.font = `${ch}px Courier`; ctx.textAlign="center";
+            obstacles.forEach(o => {
+                if(o.type === 'dj') { ctx.fillStyle="#fff"; ctx.fillText(djStep ? "(⌐■_■)ノ" : "(⌐■_■)┛", (o.x+0.5)*cw, (o.y+1)*ch); }
+                else { ctx.fillStyle=o.color; ctx.fillText(o.char, (o.x+0.5)*cw, (o.y+1)*ch); }
+            });
+
+            // NPCs
+            npcs.forEach(n => { 
+                ctx.fillStyle=n.color; ctx.save(); ctx.translate((n.x+0.5)*cw, (n.y+1)*ch); ctx.scale(n.dir, 1);
+                ctx.fillText(n.char, 0, 0); ctx.restore();
+            });
+
+            // Player
+            if(appearance.playerGlow) { ctx.fillStyle="rgba(0,255,0,0.15)"; ctx.fillRect(player.x*cw, player.y*ch, cw, ch); }
+            ctx.fillStyle="#0f0"; ctx.fillText(appearance.avatar, (player.x+0.5)*cw, (player.y+1)*ch);
+
+            requestAnimationFrame(draw);
+        }
+
+        // --- INPUT ---
+        window.addEventListener('keydown', (e) => {
+            if(!isStarted || !canMove || activeNotes.length === 0) return;
+            
+            const n = activeNotes[0];
+            const targetEl = document.getElementById('beat-target').getBoundingClientRect();
+            const noteEl = n.el.getBoundingClientRect();
+            const dist = Math.abs(noteEl.left - targetEl.left);
+
+            if(dist < config.tolerance) {
+                let k = e.key;
+                if(currentStatus.type === 'invert_controls') {
+                    const inv = { ArrowUp:'ArrowDown', ArrowDown:'ArrowUp', ArrowLeft:'ArrowRight', ArrowRight:'ArrowLeft' };
+                    k = inv[k] || k;
+                }
+
+                let nX = player.x, nY = player.y;
+                let step = currentStatus.type === 'double_tempo' ? 2 : 1;
+                if(k==='ArrowUp') nY-=step; if(k==='ArrowDown') nY+=step; if(k==='ArrowLeft') nX-=step; if(k==='ArrowRight') nX+=step;
+
+                if(!isOccupied(nX, nY)) { player.x = nX; player.y = nY; }
+
+                const pIdx = activePowerUpsOnMap.findIndex(p => p.x === player.x && p.y === player.y);
+                if(pIdx !== -1) {
+                    const pu = activePowerUpsOnMap[pIdx];
+                    currentStatus = { type: puConfig[pu.id].effect, label: EFFECTS_LIST[puConfig[pu.id].effect], beats: puConfig[pu.id].dur, maxBeats: puConfig[pu.id].dur };
+                    activePowerUpsOnMap.splice(pIdx, 1);
+                }
+
+                n.el.remove(); activeNotes.shift(); combo++; canMove = false;
+                document.getElementById('accuracy-feedback').innerText = "GREAT!";
+                document.getElementById('accuracy-feedback').style.color = "var(--great)";
+            }
+        });
+
+        // --- UI MENUS ---
+        function renderPreGameMenu() {
+            const container = document.getElementById('pre-game-pu-list'); container.innerHTML = "";
+            Object.keys(PU_TYPES).forEach(id => {
+                const div = document.createElement('div');
+                div.innerHTML = `<label style="color:${PU_TYPES[id].color}"><input type="checkbox" id="pre-${id}" ${puConfig[id].enabled?'checked':''}> ${PU_TYPES[id].char} ${id}</label>`;
+                container.appendChild(div);
+                document.getElementById(`pre-${id}`).onchange = (e) => puConfig[id].enabled = e.target.checked;
+            });
+        }
+
+        function initPowerUpMenu() {
+            const container = document.getElementById('pu-controls-container'); container.innerHTML = "";
+            Object.keys(PU_TYPES).forEach(id => {
+                const div = document.createElement('div'); div.className = 'debug-group';
+                div.innerHTML = `
+                    <label style="color:${PU_TYPES[id].color}">${id} <input type="checkbox" ${puConfig[id].enabled?'checked':''} onchange="puConfig['${id}'].enabled=this.checked"></label>
+                    <select onchange="puConfig['${id}'].effect=this.value">
+                        ${Object.keys(EFFECTS_LIST).map(eff => `<option value="${eff}" ${puConfig[id].effect===eff?'selected':''}>${EFFECTS_LIST[eff]}</option>`).join('')}
+                    </select>
+                `;
+                container.appendChild(div);
+            });
+        }
+
+        // --- BINDINGS ---
+        document.getElementById('start-btn').onclick = async () => {
+            await Tone.start();
+            kick = new Tone.MembraneSynth().toDestination();
+            snare = new Tone.NoiseSynth({ envelope: { decay: 0.1 } }).toDestination();
+            updateKickParams();
+            Tone.Transport.bpm.value = config.bpm;
+            Tone.Transport.start(); loop.start(0);
+            isStarted = true; document.getElementById('start-overlay').style.display = 'none';
+        };
+
+        const bind = (id, target, prop, callback) => {
+            const el = document.getElementById(id);
+            if(el.type === 'checkbox') el.onchange = (e) => { target[prop] = e.target.checked; if(callback) callback(); };
+            else el.oninput = (e) => { target[prop] = e.target.value; if(callback) callback(); };
+        };
+
+        bind('input-grid', config, 'grid', () => { generarLayout(); reiniciarEscena(); });
+        bind('input-npc', config, 'npcCount', reiniciarEscena);
+        bind('input-bpm', config, 'bpm', () => Tone.Transport.bpm.value = config.bpm);
+        bind('input-follow', config, 'followRadius');
+        bind('input-tol', config, 'tolerance');
+        bind('input-kick-type', config, 'kickType', updateKickParams);
+        bind('input-snare-type', config, 'snareType', () => snare.noise.type = config.snareType);
+        bind('check-snare-master', config, 'snareEnabled');
+        
+        // Toggles Decoración
+        const deco = ['dj', 'barman', 'sofas', 'tables', 'screens', 'lasers', 'sidebars', 'smoking', 'wc'];
+        deco.forEach(id => bind(`check-${id}`, appearance, id, generarLayout));
+
+        document.getElementById('user-avatar').onchange = (e) => appearance.avatar = e.target.value;
+        document.getElementById('input-volume').oninput = (e) => Tone.Destination.volume.value = e.target.value;
+
+        const setupPanel = (btn, panel) => {
+            document.getElementById(btn).onclick = () => document.getElementById(panel).style.display = 'flex';
+            document.getElementById('close-'+panel.split('-')[0]).onclick = () => document.getElementById(panel).style.display = 'none';
+        };
+        setupPanel('open-appearance', 'appearance-panel');
+        setupPanel('open-playlist', 'playlist-panel');
+        setupPanel('open-powerups', 'powerup-panel');
+        setupPanel('open-debug', 'debug-panel');
+
+        document.getElementById('btn-random-pu').onclick = () => {
+            Object.keys(puConfig).forEach(k => puConfig[k].enabled = Math.random() > 0.4);
+            renderPreGameMenu();
+        };
+    </script>
+
+
+<!-- ===================================================================== -->
+<!-- === SAFE ADDITIVE EXTENSION – NO ORIGINAL CODE MODIFIED =============== -->
+<!-- ===================================================================== -->
+
+<style>
+/* === ADDITIVE: EXTRA VISUAL PRESENCE FOR DECOR === */
+.decor-glow {
+    text-shadow: 0 0 6px currentColor, 0 0 12px currentColor;
+}
+</style>
+
+<script>
+/* ===================================================================== */
+/* === SAFE ADDITIVE EXTENSION BLOCK ==================================== */
+/* ===================================================================== */
+(function(){
+
+/* ----------------------------------------------------- */
+/* 1) DECORATIVE EXTENSIONS + TOGGLES (INSIDE CLUB_DECOR) */
+/* ----------------------------------------------------- */
+
+if (typeof appearance === 'object') {
+    appearance.neon = true;
+    appearance.speakers = true;
+    appearance.pillars = false;
+    appearance.exit = true;
+}
+
+/* Inject new toggles into Appearance panel */
+window.addEventListener('load', () => {
+    const panel = document.getElementById('appearance-panel');
+    if (!panel) return;
+
+    const headers = [...panel.querySelectorAll('h3')];
+    const decorHeader = headers.find(h => h.textContent.includes('CLUB_DECOR'));
+    if (!decorHeader) return;
+
+    const makeToggle = (id, label) => {
+        const div = document.createElement('div');
+        div.className = 'debug-group';
+        div.innerHTML = `<label>${label}<input type="checkbox" id="check-${id}" checked></label>`;
+        decorHeader.insertAdjacentElement('afterend', div);
+        document.getElementById(`check-${id}`).onchange = e => {
+            appearance[id] = e.target.checked;
+            generarLayout();
+        };
+    };
+
+    makeToggle('neon', 'NEON_SIGNS');
+    makeToggle('speakers', 'SPEAKERS');
+    makeToggle('pillars', 'PILLARS');
+    makeToggle('exit', 'EXIT_SIGN');
+});
+
+/* Extend generarLayout safely */
+if (typeof generarLayout === 'function') {
+    const _gen = generarLayout;
+    generarLayout = function(){
+        _gen();
+
+        const g = config.grid;
+
+        if (appearance.neon)
+            obstacles.push({x:2,y:1,char:'[NEON]',color:'#ff00ff',decor:true});
+
+        if (appearance.speakers)
+            obstacles.push({x:0,y:Math.floor(g/2),char:'[|||]',color:'#00ffff',decor:true});
+
+        if (appearance.pillars)
+            for(let y=3;y<g-3;y+=4)
+                obstacles.push({x:Math.floor(g/2),y,char:'║',color:'#999',decor:true});
+
+        if (appearance.exit)
+            obstacles.push({x:g-2,y:1,char:'[EXIT]',color:'#00ff00',decor:true});
+    };
+}
+
+/* ----------------------------------------------------- */
+/* 2) SOFAS PROTECT COMBO (SAFE)                          */
+/* ----------------------------------------------------- */
+
+function playerOnSofa(){
+    return obstacles.some(o =>
+        o.char === 'TTT' &&
+        o.x === player.x &&
+        o.y === player.y
+    );
+}
+
+/* Prevent combo loss when missing notes */
+if (typeof crearNota === 'function') {
+    const _crearNota = crearNota;
+    crearNota = function(isOffbeat){
+        _crearNota(isOffbeat);
+
+        const last = activeNotes[activeNotes.length - 1];
+        if (!last) return;
+
+        const origFinish = last.el.getAnimations()[0].onfinish;
+        last.el.getAnimations()[0].onfinish = () => {
+            if (!playerOnSofa()) combo = 0;
+            if (origFinish) origFinish();
+        };
+    };
+}
+
+/* ----------------------------------------------------- */
+/* 3) SLIDER VALUE LABELS (ALL RANGE INPUTS)              */
+/* ----------------------------------------------------- */
+
+window.addEventListener('load', () => {
+    document.querySelectorAll('input[type="range"]').forEach(slider => {
+        if (slider.dataset.hasValue) return;
+        slider.dataset.hasValue = '1';
+
+        const span = document.createElement('span');
+        span.className = 'slider-val';
+        span.textContent = slider.value;
+        slider.parentNode.appendChild(span);
+
+        slider.addEventListener('input', () => {
+            span.textContent = slider.value;
+        });
+    });
+});
+
+/* ----------------------------------------------------- */
+/* 4) MANUAL BPM SLIDER (NON-DESTRUCTIVE)                 */
+/* ----------------------------------------------------- */
+
+window.addEventListener('load', () => {
+    const debug = document.getElementById('debug-panel');
+    if (!debug) return;
+
+    const wrap = document.createElement('div');
+    wrap.className = 'debug-group';
+    wrap.innerHTML = `
+        <label>MANUAL_BPM_OVERRIDE</label>
+        <div style="display:flex;gap:6px;align-items:center">
+            <input type="range" min="60" max="240" value="${config.bpm}">
+            <span class="slider-val">${config.bpm}</span>
+        </div>
+    `;
+    debug.appendChild(wrap);
+
+    const slider = wrap.querySelector('input');
+    const val = wrap.querySelector('span');
+
+    slider.oninput = () => {
+        val.textContent = slider.value;
+        config.bpm = Number(slider.value);
+        if (window.Tone && Tone.Transport)
+            Tone.Transport.bpm.rampTo(config.bpm, 0.2);
+        const bpmDisplay = document.getElementById('bpm-display');
+        if (bpmDisplay) bpmDisplay.innerText = `BPM: ${Math.round(config.bpm)}`;
+    };
+});
+
+/* ----------------------------------------------------- */
+/* 5) EXTRA VISUAL PRESENCE (DRAW EXTENSION)              */
+/* ----------------------------------------------------- */
+
+if (typeof draw === 'function') {
+    const _draw = draw;
+    draw = function(){
+        _draw();
+
+        obstacles.forEach(o=>{
+            if(o.decor){
+                ctx.save();
+                ctx.strokeStyle = o.color;
+                ctx.shadowColor = o.color;
+                ctx.shadowBlur = 10;
+                const cw = 450/config.grid;
+                const ch = 350/config.grid;
+                ctx.strokeRect(o.x*cw,o.y*ch,cw,ch);
+                ctx.restore();
+            }
+        });
+    };
+}
+
+})(); 
+</script>
+<!-- ===================================================================== -->
+<!-- === END SAFE ADDITIVE EXTENSION ====================================== -->
+<!-- ===================================================================== -->
+
+
+<!-- ===================================================================== -->
+<!-- === SAFE ADDITIVE EXTENSION: MUSIC ROTATION ENGINE =================== -->
+<!-- ===================================================================== -->
+
+<script>
+(function(){
+
+/* ----------------------------------------------------- */
+/* CONFIGURATION                                         */
+/* ----------------------------------------------------- */
+const ROTATION_BEATS = 32;
+const BPM_DELTAS = [3, 5, 10];
+const BPM_MIN = 60;
+const BPM_MAX = 220;
+const BPM_RAMP_TIME = 2; // seconds
+
+let rotationBeatCounter = 0;
+
+/* ----------------------------------------------------- */
+/* VISUAL FEEDBACK HELPERS                               */
+/* ----------------------------------------------------- */
+function flashBpmDisplay(){
+    const el = document.getElementById('bpm-display');
+    if(!el) return;
+    el.style.boxShadow = '0 0 20px var(--playlist-color)';
+    el.style.borderColor = 'var(--playlist-color)';
+    setTimeout(()=>{
+        el.style.boxShadow = '';
+        el.style.borderColor = 'var(--playlist-color)';
+    },600);
+}
+
+function showRotationHUD(text){
+    if(!window.currentStatus) return;
+    currentStatus = {
+        type: 'rotation',
+        label: text,
+        beats: 8,
+        maxBeats: 8
+    };
+}
+
+/* ----------------------------------------------------- */
+/* MUSIC ROTATION LOGIC                                  */
+/* ----------------------------------------------------- */
+function rotateMusic(){
+
+    /* 1) BPM ROTATION */
+    const delta = BPM_DELTAS[Math.floor(Math.random()*BPM_DELTAS.length)];
+    const sign = Math.random() > 0.5 ? 1 : -1;
+    let targetBpm = config.bpm + delta * sign;
+
+    targetBpm = Math.max(BPM_MIN, Math.min(BPM_MAX, targetBpm));
+
+    config.bpm = targetBpm;
+
+    if (window.Tone && Tone.Transport){
+        Tone.Transport.bpm.rampTo(targetBpm, BPM_RAMP_TIME);
+    }
+
+    const bpmDisplay = document.getElementById('bpm-display');
+    if(bpmDisplay){
+        bpmDisplay.innerText = `BPM: ${Math.round(targetBpm)}`;
+    }
+
+    flashBpmDisplay();
+
+    /* 2) KICK & SNARE ROTATION */
+    const kickTypes = ['deep','tight','electro'];
+    const snareTypes = ['white','brown','pink'];
+
+    config.kickType = kickTypes[Math.floor(Math.random()*kickTypes.length)];
+    config.snareType = snareTypes[Math.floor(Math.random()*snareTypes.length)];
+
+    if(typeof updateKickParams === 'function') updateKickParams();
+    if(window.snare && snare.noise) snare.noise.type = config.snareType;
+
+    /* HUD FEEDBACK */
+    showRotationHUD(`TRACK ROTATION`);
+}
+
+/* ----------------------------------------------------- */
+/* BEAT HOOK (SAFE)                                      */
+/* ----------------------------------------------------- */
+if (window.Tone && Tone.Transport){
+
+    Tone.Transport.scheduleRepeat((time)=>{
+        rotationBeatCounter++;
+
+        if(rotationBeatCounter % ROTATION_BEATS === 0){
+            Tone.Draw.schedule(()=>{
+                rotateMusic();
+            }, time);
+        }
+
+    }, "4n");
+}
+
+})();
+</script>
+
+<!-- ===================================================================== -->
+<!-- === END MUSIC ROTATION ENGINE ======================================= -->
+<!-- ===================================================================== -->
+
+
+<!-- ===================================================================== -->
+<!-- === SAFE ADDITIVE EXTENSION: NPC COLLISION PATCH ===================== -->
+<!-- ===================================================================== -->
+
+<script>
+(function(){
+
+/* ----------------------------------------------------- */
+/* 1) STATE + TOGGLE DEFAULT                             */
+/* ----------------------------------------------------- */
+
+if (typeof config === 'object') {
+    config.npcCollision = true; // default ON
+}
+
+/* ----------------------------------------------------- */
+/* 2) ADD TOGGLE TO DEBUG / SYSTEM MENU                  */
+/* ----------------------------------------------------- */
+
+window.addEventListener('load', () => {
+    const debugPanel = document.getElementById('debug-panel');
+    if (!debugPanel) return;
+
+    const group = document.createElement('div');
+    group.className = 'debug-group';
+    group.innerHTML = `
+        <label>
+            NPC_COLLISION_LOCK
+            <input type="checkbox" checked>
+        </label>
+    `;
+    debugPanel.appendChild(group);
+
+    const checkbox = group.querySelector('input');
+    checkbox.onchange = (e) => {
+        config.npcCollision = e.target.checked;
+    };
+});
+
+/* ----------------------------------------------------- */
+/* 3) NPC–NPC COLLISION CHECK                            */
+/* ----------------------------------------------------- */
+
+function npcOccupied(x, y, selfNpc){
+    return npcs.some(n =>
+        n !== selfNpc &&
+        n.x === x &&
+        n.y === y
+    );
+}
+
+/* ----------------------------------------------------- */
+/* 4) PATCH NPC MOVEMENT (SAFE)                          */
+/* ----------------------------------------------------- */
+
+if (typeof actualizarNPCs === 'function') {
+    const _actualizarNPCs = actualizarNPCs;
+
+    actualizarNPCs = function(onKick){
+        _actualizarNPCs(onKick);
+
+        if (!config.npcCollision) return;
+
+        // Resolve NPC overlap defensively
+        npcs.forEach(n => {
+            if (npcOccupied(n.x, n.y, n)) {
+                const dirs = [[1,0],[-1,0],[0,1],[0,-1]];
+                for (let d of dirs) {
+                    const nx = n.x + d[0];
+                    const ny = n.y + d[1];
+
+                    if (
+                        !isOccupied(nx, ny) &&
+                        !npcOccupied(nx, ny, n)
+                    ) {
+                        n.x = nx;
+                        n.y = ny;
+                        break;
+                    }
+                }
+            }
+        });
+    };
+}
+
+/* ----------------------------------------------------- */
+/* 5) ALLOW PLAYER TO PASS THROUGH NPCs                  */
+/* ----------------------------------------------------- */
+
+if (typeof isOccupied === 'function') {
+    const _isOccupied = isOccupied;
+
+    isOccupied = function(x, y){
+        // original collision (walls, decor, bounds)
+        if (_isOccupied(x, y)) return true;
+
+        // ignore NPCs entirely for player movement
+        return false;
+    };
+}
+
+})();
+</script>
+
+<!-- ===================================================================== -->
+<!-- === END NPC COLLISION PATCH ========================================== -->
+<!-- ===================================================================== -->
+
+
+<!-- ===================================================================== -->
+<!-- === SAFE ADDITIVE EXTENSION: MOBILE LAYOUT + TOUCH CONTROLS ========== -->
+<!-- ===================================================================== -->
+
+<style>
+/* --- CONFIGURACIÓN DE VISTA --- */
+body.mobile-active {
+    overflow: hidden !important;
+    margin: 0;
+    background: #000;
+    font-family: 'Segoe UI', sans-serif;
+}
+
+.mobile-layout-container {
+    display: flex;
+    flex-direction: column;
+    width: 100vw;
+    height: 100vh;
+}
+
+.game-viewport {
+    flex: 1; /* Ocupa el espacio superior restante */
+    background: #000;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    position: relative;
+    overflow: hidden;
+}
+
+.game-viewport canvas {
+    max-width: 100% !important;
+    max-height: 100% !important;
+    object-fit: contain;
+}
+
+/* --- ÁREA DEL CONTROLADOR (ZONA INFERIOR) --- */
+.mobile-controls-area {
+    height: 320px; /* Altura fija optimizada para manos */
+    background: #111;
+    background: linear-gradient(0deg, #050505 0%, #151515 100%);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    border-top: 2px solid #222;
+    padding-bottom: env(safe-area-inset-bottom); /* Respetar notch en iPhone/Android */
+}
+
+/* Contenedor del Pad */
+.dpad-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 90px);
+    grid-template-rows: repeat(3, 90px);
+    gap: 15px;
+}
+
+/* Botones Estilizados */
+.m-btn {
+    width: 90px;
+    height: 90px;
+    background: #222;
+    border: 2px solid #333;
+    border-radius: 50%; /* Forma redonda de consola moderna */
+    color: #fff;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    font-size: 32px;
+    user-select: none;
+    touch-action: none;
+    box-shadow: 0 6px 0 #000;
+    transition: all 0.05s ease;
+}
+
+/* Feedback visual al presionar (Vital para ritmo) */
+.m-btn:active {
+    background: #00f2ff; /* Color Neón */
+    color: #000;
+    transform: translateY(4px);
+    box-shadow: 0 2px 0 #000, 0 0 20px rgba(0, 242, 255, 0.6);
+    border-color: #fff;
+}
+
+/* Posicionamiento Lógico */
+.btn-up    { grid-column: 2; grid-row: 1; }
+.btn-left  { grid-column: 1; grid-row: 2; }
+.btn-right { grid-column: 3; grid-row: 2; }
+.btn-down  { grid-column: 2; grid-row: 3; }
+
+/* Botón central (Decorativo o para pausar) */
+.btn-center {
+    grid-column: 2; grid-row: 2;
+    background: #1a1a1a;
+    border: 1px solid #222;
+    font-size: 14px;
+    box-shadow: inset 0 0 10px #000;
+}
+
+/* --- OVERLAY DE INICIO --- */
+#mobile-selector-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.9);
+    z-index: 99999;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    color: white;
+}
+
+.selector-box {
+    background: #1a1a1a;
+    padding: 30px;
+    border-radius: 20px;
+    border: 2px solid #00f2ff;
+    text-align: center;
+}
+
+.start-button {
+    margin-top: 20px;
+    padding: 12px 40px;
+    background: #00f2ff;
+    border: none;
+    border-radius: 30px;
+    font-weight: bold;
+    font-size: 18px;
+    cursor: pointer;
+}
+</style>
+
+<script>
+(function() {
+    let useMobile = false;
+
+    // 1. Inyectar Selector Inicial
+    const overlay = document.createElement('div');
+    overlay.id = 'mobile-selector-overlay';
+    overlay.innerHTML = `
+        <div class="selector-box">
+            <h2 style="color:#00f2ff; margin-top:0;">MODO DE VISTA</h2>
+            <div style="margin: 20px 0;">
+                <input type="checkbox" id="toggleMobile" style="transform: scale(1.5);">
+                <label for="toggleMobile" style="margin-left: 10px; font-size: 18px;">Activar Controles Mobile</label>
+            </div>
+            <button class="start-button" id="btnConfirm">INICIAR JUEGO</button>
+        </div>
+    `;
+    document.body.appendChild(overlay);
+
+    document.getElementById('toggleMobile').onchange = (e) => { useMobile = e.target.checked; };
+
+    // 2. Función para construir la interfaz
+    function buildMobileUI() {
+        if (!useMobile) return;
+
+        document.body.classList.add('mobile-active');
+
+        const container = document.createElement('div');
+        container.className = 'mobile-layout-container';
+
+        const viewport = document.createElement('div');
+        viewport.className = 'game-viewport';
+
+        const controls = document.createElement('div');
+        controls.className = 'mobile-controls-area';
+
+        const grid = document.createElement('div');
+        grid.className = 'dpad-grid';
+        grid.innerHTML = '<div class="m-btn btn-center" style="box-shadow:none; pointer-events:none;">•</div>';
+
+        // Captura de elementos originales
+        const canvas = document.querySelector('canvas');
+        const hud = document.getElementById('hud') || document.querySelector('[id*="score"]');
+        if (canvas) viewport.appendChild(canvas);
+        if (hud) viewport.appendChild(hud);
+
+        // Teclas
+        const keyConfig = [
+            {k: 'ArrowUp', c: 'btn-up', l: '▲'},
+            {k: 'ArrowLeft', c: 'btn-left', l: '◀'},
+            {k: 'ArrowRight', c: 'btn-right', l: '▶'},
+            {k: 'ArrowDown', c: 'btn-down', l: '▼'}
+        ];
+
+        keyConfig.forEach(cfg => {
+            const btn = document.createElement('div');
+            btn.className = `m-btn ${cfg.c}`;
+            btn.innerHTML = cfg.l;
+
+            const sendKey = (type) => (e) => {
+                e.preventDefault();
+                window.dispatchEvent(new KeyboardEvent(type, {key: cfg.k, bubbles: true}));
+            };
+
+            btn.ontouchstart = btn.onmousedown = sendKey('keydown');
+            btn.ontouchend = btn.onmouseup = sendKey('keyup');
+            grid.appendChild(btn);
+        });
+
+        controls.appendChild(grid);
+        container.appendChild(viewport);
+        container.appendChild(controls);
+
+        document.body.innerHTML = ""; 
+        document.body.appendChild(container);
+    }
+
+    // 3. Lanzar juego
+    document.getElementById('btnConfirm').onclick = () => {
+        overlay.remove();
+        if (typeof window.startGame === 'function') window.startGame();
+        if (useMobile) buildMobileUI();
+    };
+})();
+</script>
+<!-- ===================================================================== -->
+<!-- === END FINAL MOBILE LAYOUT SYSTEM ================================== -->
+<!-- ===================================================================== -->
+
+</body>
+</html>
