@@ -180,9 +180,39 @@
 
         #game-container { width: 450px; border: 1px solid #333; background: #000; position: relative; transition: transform 0.05s ease-out; }
         #zona-juego { display: block; width: 450px; height: 350px; }
-        #zona-beat { width: 450px; height: 80px; background: #0a0a0a; border-top: 2px solid #222; position: relative; overflow: hidden; }
+        #zona-beat { 
+            width: 450px; 
+            height: 100px; 
+            background: linear-gradient(to bottom, #0a0a0a, #000); 
+            border-top: 2px solid #222; 
+            position: relative; 
+            overflow: hidden; 
+        }
         #beat-target { position: absolute; left: 30px; top: 50%; transform: translateY(-50%); width: 40px; height: 40px; border: 2px solid #444; }
-        .note { position: absolute; top: 50%; transform: translateY(-50%); width: 25px; height: 25px; background: white; display: flex; align-items: center; justify-content: center; color: #000; font-weight: bold; }
+        .note { 
+            position: absolute; 
+            top: 50%; 
+            transform: translateY(-50%); 
+            width: 30px; 
+            height: 30px; 
+            border-radius: 6px; 
+            display: flex; 
+            align-items: center; 
+            justify-content: center; 
+            font-weight: bold; 
+            font-size: 16px; 
+            z-index: 5; 
+            transition: transform 0.1s ease;
+            will-change: transform, left;
+        }
+        
+        /* DDR - EFECTO AL GOLPEAR NOTA */
+        .note.hit {
+            transform: translateY(-50%) scale(1.4);
+            opacity: 0.8;
+            filter: brightness(1.5);
+        }
+        
         .inverted { filter: invert(1) hue-rotate(180deg); }
 
         /* BOTONES Y INPUTS */
@@ -316,7 +346,11 @@
         
         <div id="game-container">
             <canvas id="zona-juego" width="450" height="350"></canvas>
-            <div id="zona-beat"><div id="beat-target"></div></div>
+            <div id="zona-beat">
+                <div id="beat-target"></div>
+                <!-- DDR - LÍNEA DEL CARRIL -->
+                <div style="position: absolute; top: 50%; left: 0; right: 0; height: 1px; background: rgba(255,255,255,0.1); transform: translateY(-50%); z-index: 1;"></div>
+            </div>
         </div>
         
         <div id="status-hud">
@@ -414,7 +448,7 @@
                     crearNota(false);
                 }
                 // Penalización: Si hay demasiadas notas acumuladas, resetear combo
-                if (activeNotes.length > 3) {
+                if (activeNotes.length > 20) {
                     combo = 0;
                     document.getElementById('combo-counter').innerText = "000";
                     document.getElementById('accuracy-feedback').innerText = "OVERLOAD";
@@ -604,64 +638,142 @@
         }
     });
 }
+
+        // ============================================
+        // DDR - FUNCIÓN CREARNOTA MODIFICADA
+        // ============================================
         function crearNota(isOffbeat, isDoubleTempo = false) {
-    // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/8e398c92-5a00-4d2e-8c26-bde5f94162b8',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'crearNota:entry',message:'Creating note',data:{isOffbeat,isDoubleTempo,isStarted,activeNotesCount:activeNotes.length},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
-    // #endregion
-    if(!isStarted) return;
-    const el = document.createElement('div'); el.className = 'note';
-    
-    // Visual styling for different note types
-    if(isDoubleTempo) {
-        if(isOffbeat) {
-            // 3/4 step note (off-beat in double tempo) - cyan border
-            el.style.border = "3px solid var(--excellent)";
-            el.style.background = "rgba(0, 255, 255, 0.3)";
-            el.style.height = "20px";
-        } else {
-            // 1/4 step note (on-beat in double tempo) - bright white
-            el.style.border = "3px solid #ffffff";
-            el.style.background = "rgba(255, 255, 255, 0.5)";
-            el.style.height = "25px";
-        }
-    } else if(isOffbeat) {
-        // Regular off-beat note
-        el.style.border = "2px solid var(--excellent)";
-        el.style.height = "12px";
-    }
-    
-    document.getElementById('zona-beat').appendChild(el);
-    
-    // Guardamos el objeto de la nota
-    const obj = { el, isOffbeat, isDoubleTempo }; 
-    activeNotes.push(obj);
-    // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/8e398c92-5a00-4d2e-8c26-bde5f94162b8',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'crearNota:afterPush',message:'Note added to array',data:{activeNotesCount:activeNotes.length,objId:obj.el.id||'no-id',isDoubleTempo},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
-    // #endregion
-
-    // Velocidad de nota ajustable (más rápido = más difícil)
-    const noteDuration = config.noteSpeed || 900;
-    const noteWindow = config.noteWindow || 0.75; // Ventana de timing más pequeña (75% en lugar de 90%)
-    const anim = el.animate([{left:'450px'}, {left:'30px', offset:noteWindow}, {left:'-50px'}], {duration:noteDuration});
-
-    anim.onfinish = () => {
-        // #region agent log
-        fetch('http://127.0.0.1:7242/ingest/8e398c92-5a00-4d2e-8c26-bde5f94162b8',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'crearNota:onfinish',message:'Note animation finished',data:{activeNotesCount:activeNotes.length,stillInArray:activeNotes.includes(obj),comboBefore:combo,isDoubleTempo},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C,D'})}).catch(()=>{});
-        // #endregion
-        // Si la nota llega al final y sigue en el array, el jugador no la pulsó: ES UN MISS
-        if(activeNotes.includes(obj)) { 
-            combo = 0; 
             // #region agent log
-            fetch('http://127.0.0.1:7242/ingest/8e398c92-5a00-4d2e-8c26-bde5f94162b8',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'crearNota:miss',message:'MISS detected - combo reset',data:{combo,activeNotesCountBefore:activeNotes.length,isDoubleTempo},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'})}).catch(()=>{});
+            fetch('http://127.0.0.1:7242/ingest/8e398c92-5a00-4d2e-8c26-bde5f94162b8',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'crearNota:entry',message:'Creating note',data:{isOffbeat,isDoubleTempo,isStarted,activeNotesCount:activeNotes.length},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
             // #endregion
-            document.getElementById('combo-counter').innerText = "000";
-            document.getElementById('accuracy-feedback').innerText = "MISS";
-            document.getElementById('accuracy-feedback').style.color = "var(--miss)";
-            activeNotes.shift(); 
+            if(!isStarted) return;
+            
+            const el = document.createElement('div'); 
+            el.className = 'note';
+            
+            // DDR CONFIGURACIÓN - CARRIL ÚNICO
+            const laneHeight = 50; // Todas las notas en el centro (50%)
+            el.style.top = `${laneHeight}%`;
+            
+            // DDR - SÍMBOLOS MUSICALES Y EMOJIS
+            if (isDoubleTempo) {
+                el.style.border = "3px solid var(--excellent)";
+                el.style.background = "rgba(0, 255, 255, 0.5)";
+                el.textContent = '⚡';
+                el.style.boxShadow = "0 0 10px rgba(0, 255, 255, 0.5)";
+            } else if (isOffbeat) {
+                el.style.border = "2px solid var(--excellent)";
+                el.style.background = "rgba(33, 150, 243, 0.5)";
+                el.textContent = '•';
+                el.style.borderRadius = "50%";
+                el.style.boxShadow = "0 0 8px rgba(33, 150, 243, 0.5)";
+            } else {
+                el.style.border = "2px solid #ffffff";
+                el.style.background = "rgba(255, 82, 82, 0.6)";
+                const symbols = ['♪', '♫', '♬', '♩'];
+                el.textContent = symbols[beatCounter % symbols.length];
+                el.style.boxShadow = "0 0 8px rgba(255, 82, 82, 0.5)";
+            }
+            
+            // DDR - EMOJIS PARA POWER-UPS ACTIVOS
+            if (currentStatus?.type) {
+                const powerupEmojis = {
+                    'double_tempo': ['⚡', '🚀', '💨'],
+                    'invert_controls': ['🔄', '↪️', '↩️'],
+                    'pause_beat': ['⏸️', '⏱️', '⏳'],
+                    'shake_screen': ['🌪️', '🌀', '💫'],
+                    'tilt_screen': ['📐', '📏', '⚖️'],
+                    'invert_colors': ['🌈', '🎨', '🖼️'],
+                    'off_beat': ['🎵', '🎶', '🎼']
+                };
+                if (powerupEmojis[currentStatus.type]) {
+                    const emojis = powerupEmojis[currentStatus.type];
+                    el.textContent = emojis[Math.floor(Math.random() * emojis.length)];
+                }
+            }
+            
+            // Tamaño fijo para todas las notas DDR
+            el.style.width = "30px";
+            el.style.height = "30px";
+            el.style.fontSize = "16px";
+            el.style.fontWeight = "bold";
+            el.style.display = "flex";
+            el.style.alignItems = "center";
+            el.style.justifyContent = "center";
+            el.style.zIndex = "5";
+            
+            document.getElementById('zona-beat').appendChild(el);
+            
+            const obj = { el, isOffbeat, isDoubleTempo }; 
+            activeNotes.push(obj);
+            // #region agent log
+            fetch('http://127.0.0.1:7242/ingest/8e398c92-5a00-4d2e-8c26-bde5f94162b8',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'crearNota:afterPush',message:'Note added to array',data:{activeNotesCount:activeNotes.length,objId:obj.el.id||'no-id',isDoubleTempo},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
+            // #endregion
+
+            // DDR - VELOCIDAD MUY LENTA Y ESPACIADO ORDENADO
+            const noteDuration = 2800; // 2.8 segundos (muy lento)
+            const noteWindow = config.noteWindow || 0.75;
+            
+            // DDR - POSICIÓN INICIAL ORDENADA (CARRIL LINEAL)
+            const basePosition = 450;
+            const spacing = 35; // Píxeles entre notas (notas juntas)
+            const noteOffset = activeNotes.length * spacing;
+            const startPosition = Math.min(basePosition + noteOffset, 650); // Máximo 650px
+            
+            el.style.left = `${startPosition}px`;
+            
+            const anim = el.animate([
+                { left: `${startPosition}px`, opacity: 1 },
+                { left: '30px', offset: noteWindow, opacity: 1 },
+                { left: '-50px', opacity: 0 }
+            ], {
+                duration: noteDuration,
+                easing: 'linear'
+            });
+
+            anim.onfinish = () => {
+                // #region agent log
+                fetch('http://127.0.0.1:7242/ingest/8e398c92-5a00-4d2e-8c26-bde5f94162b8',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'crearNota:onfinish',message:'Note animation finished',data:{activeNotesCount:activeNotes.length,stillInArray:activeNotes.includes(obj),comboBefore:combo,isDoubleTempo},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C,D'})}).catch(()=>{});
+                // #endregion
+                // Si la nota llega al final y sigue en el array, el jugador no la pulsó: ES UN MISS
+                if(activeNotes.includes(obj)) { 
+                    combo = 0; 
+                    // #region agent log
+                    fetch('http://127.0.0.1:7242/ingest/8e398c92-5a00-4d2e-8c26-bde5f94162b8',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'crearNota:miss',message:'MISS detected - combo reset',data:{combo,activeNotesCountBefore:activeNotes.length,isDoubleTempo},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'})}).catch(()=>{});
+                    // #endregion
+                    document.getElementById('combo-counter').innerText = "000";
+                    document.getElementById('accuracy-feedback').innerText = "MISS";
+                    document.getElementById('accuracy-feedback').style.color = "var(--miss)";
+                    activeNotes.shift(); 
+                }
+                el.remove();
+            };
         }
-        el.remove();
-    };
-}
+
+        // ============================================
+        // DDR - GENERAR TREN INICIAL DE 8 NOTAS
+        // ============================================
+        function generarTrenInicialDDR() {
+            if (!isStarted) return;
+            
+            console.log('[DDR] Generando tren inicial de 8 notas...');
+            
+            // Calcular espaciado basado en BPM actual
+            const bpm = config?.bpm || 120;
+            const msPerBeat = 60000 / bpm;
+            
+            // Generar 8 notas escalonadas (para ver los próximos 8 movimientos)
+            for (let i = 0; i < 8; i++) {
+                setTimeout(() => {
+                    if (isStarted) {
+                        // Patrón: on-beat, on-beat, off-beat
+                        const isOffbeat = (i % 3 === 2); // Cada 3 notas, la tercera es off-beat
+                        crearNota(isOffbeat, false);
+                    }
+                }, i * (msPerBeat / 1.5)); // Notas más juntas para densidad
+            }
+        }
+        
         function updateHUD() {
             if (currentStatus.beats > 0) {
                 currentStatus.beats--;
@@ -958,6 +1070,20 @@
         // #endregion
         document.getElementById('combo-counter').innerText = combo.toString().padStart(3, '0');
         
+        // DDR - FEEDBACK VISUAL AL GOLPEAR NOTA
+        if (activeNotes[0] && activeNotes[0].el) {
+            const noteEl = activeNotes[0].el;
+            noteEl.classList.add('hit');
+            noteEl.style.background = 'rgba(0, 255, 0, 0.7)';
+            noteEl.style.boxShadow = '0 0 15px rgba(0, 255, 0, 0.5)';
+            
+            setTimeout(() => {
+                if (noteEl) {
+                    noteEl.classList.remove('hit');
+                }
+            }, 150);
+        }
+        
         // Feedback de precisión basado en qué tan cerca está la nota del target
         const timingAccuracy = 1 - (distance / maxDistance);
         if (timingAccuracy > 0.9) {
@@ -1045,9 +1171,6 @@
     kickVolume = new Tone.Volume(initialKickVol).toDestination();
     snareVolume = new Tone.Volume(initialSnareVol).toDestination();
     
-    // Elimina estas líneas viejas que causaban el desajuste:
-    // document.getElementById('input-snare-volume').value = snareVolDb*0.2; <--- ESTO CAUSABA EL ERROR
-    
     kick = new Tone.MembraneSynth().connect(kickVolume);
     snare = new Tone.NoiseSynth({ envelope: { decay: 0.1 } }).connect(snareVolume);
     
@@ -1057,6 +1180,9 @@
     loop.start(0);
     isStarted = true; 
     document.getElementById('start-overlay').style.display = 'none';
+    
+    // DDR - GENERAR TREN INICIAL DE 8 NOTAS
+    setTimeout(generarTrenInicialDDR, 300);
 };
 
         const bind = (id, target, prop, callback) => {
@@ -1119,814 +1245,5 @@
             renderPreGameMenu();
         };
     </script>
-
-
-<!-- ===================================================================== -->
-<!-- === SAFE ADDITIVE EXTENSION – NO ORIGINAL CODE MODIFIED =============== -->
-<!-- ===================================================================== -->
-
-<style>
-/* === ADDITIVE: EXTRA VISUAL PRESENCE FOR DECOR === */
-.decor-glow {
-    text-shadow: 0 0 6px currentColor, 0 0 12px currentColor;
-}
-</style>
-
-<script>
-/* ===================================================================== */
-/* === SAFE ADDITIVE EXTENSION BLOCK ==================================== */
-/* ===================================================================== */
-(function(){
-
-/* ----------------------------------------------------- */
-/* 1) DECORATIVE EXTENSIONS + TOGGLES (INSIDE CLUB_DECOR) */
-/* ----------------------------------------------------- */
-
-if (typeof appearance === 'object') {
-    appearance.neon = true;
-    appearance.speakers = true;
-    appearance.pillars = false;
-    appearance.exit = true;
-}
-
-/* Inject new toggles into Appearance panel */
-window.addEventListener('load', () => {
-    const panel = document.getElementById('appearance-panel');
-    if (!panel) return;
-
-    const headers = [...panel.querySelectorAll('h3')];
-    const decorHeader = headers.find(h => h.textContent.includes('CLUB_DECOR'));
-    if (!decorHeader) return;
-
-    const makeToggle = (id, label) => {
-        const div = document.createElement('div');
-        div.className = 'debug-group';
-        div.innerHTML = `<label>${label}<input type="checkbox" id="check-${id}" checked></label>`;
-        decorHeader.insertAdjacentElement('afterend', div);
-        document.getElementById(`check-${id}`).onchange = e => {
-            appearance[id] = e.target.checked;
-            generarLayout();
-        };
-    };
-
-    makeToggle('neon', 'NEON_SIGNS');
-    makeToggle('speakers', 'SPEAKERS');
-    makeToggle('pillars', 'PILLARS');
-    makeToggle('exit', 'EXIT_SIGN');
-});
-
-/* Extend generarLayout safely */
-if (typeof generarLayout === 'function') {
-    const _gen = generarLayout;
-    generarLayout = function(){
-        _gen();
-
-        const g = config.grid;
-
-        if (appearance.neon)
-            obstacles.push({x:2,y:1,char:'[NEON]',color:'#01CDFE',decor:true});
-
-        if (appearance.speakers)
-            obstacles.push({x:0,y:Math.floor(g/2),char:'[|||]',color:'#01CDFE',decor:true});
-
-        if (appearance.pillars)
-            for(let y=3;y<g-3;y+=4)
-                obstacles.push({x:Math.floor(g/2),y,char:'║',color:'#01CDFE',decor:true});
-
-        if (appearance.exit)
-            obstacles.push({x:g-2,y:1,char:'[EXIT]',color:'#00ff00',decor:true});
-    };
-}
-
-/* ----------------------------------------------------- */
-/* 2) SOFAS PROTECT COMBO (SAFE)                          */
-/* ----------------------------------------------------- */
-
-function playerOnSofa(){
-    return obstacles.some(o =>
-        o.char === 'TTT' &&
-        o.x === player.x &&
-        o.y === player.y
-    );
-}
-
-/* Prevent combo loss when missing notes */
-if (typeof crearNota === 'function') {
-    const _crearNota = crearNota;
-    crearNota = function(isOffbeat){
-        _crearNota(isOffbeat);
-
-        const last = activeNotes[activeNotes.length - 1];
-        if (!last) return;
-
-        const origFinish = last.el.getAnimations()[0].onfinish;
-        last.el.getAnimations()[0].onfinish = () => {
-            // #region agent log
-            fetch('http://127.0.0.1:7242/ingest/8e398c92-5a00-4d2e-8c26-bde5f94162b8',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'sofaProtection:onfinish',message:'Sofa protection check',data:{onSofa:playerOnSofa(),comboBefore:combo,stillInArray:activeNotes.includes(last)},timestamp:Date.now(),sessionId:'debug-session',runId:'post-fix',hypothesisId:'D'})}).catch(()=>{});
-            // #endregion
-            // Only reset combo if note was MISSED (still in array) AND player is NOT on sofa
-            // If note was HIT, it's already removed from activeNotes, so don't reset combo
-            if (activeNotes.includes(last) && !playerOnSofa()) {
-                combo = 0;
-                // #region agent log
-                fetch('http://127.0.0.1:7242/ingest/8e398c92-5a00-4d2e-8c26-bde5f94162b8',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'sofaProtection:reset',message:'Combo reset by sofa protection (MISS)',data:{combo},timestamp:Date.now(),sessionId:'debug-session',runId:'post-fix',hypothesisId:'D'})}).catch(()=>{});
-                // #endregion
-            }
-            if (origFinish) origFinish();
-        };
-    };
-}
-
-/* ----------------------------------------------------- */
-/* 3) SLIDER VALUE LABELS (ALL RANGE INPUTS)              */
-/* ----------------------------------------------------- */
-
-window.addEventListener('load', () => {
-    document.querySelectorAll('input[type="range"]').forEach(slider => {
-        if (slider.dataset.hasValue) return;
-        slider.dataset.hasValue = '1';
-
-        const span = document.createElement('span');
-        span.className = 'slider-val';
-        span.textContent = slider.value;
-        slider.parentNode.appendChild(span);
-
-        slider.addEventListener('input', () => {
-            span.textContent = slider.value;
-        });
-    });
-});
-
-/* ----------------------------------------------------- */
-/* 4) MANUAL BPM SLIDER (NON-DESTRUCTIVE)                 */
-/* ----------------------------------------------------- */
-
-window.addEventListener('load', () => {
-    const debug = document.getElementById('debug-panel');
-    if (!debug) return;
-
-    const wrap = document.createElement('div');
-    wrap.className = 'debug-group';
-    wrap.innerHTML = `
-        <label>MANUAL_BPM_OVERRIDE</label>
-        <div style="display:flex;gap:6px;align-items:center">
-            <input type="range" min="60" max="240" value="${config.bpm}">
-            <span class="slider-val">${config.bpm}</span>
-        </div>
-    `;
-    debug.appendChild(wrap);
-
-    const slider = wrap.querySelector('input');
-    const val = wrap.querySelector('span');
-
-    slider.oninput = () => {
-        val.textContent = slider.value;
-        config.bpm = Number(slider.value);
-        if (window.Tone && Tone.Transport)
-            Tone.Transport.bpm.rampTo(config.bpm, 0.2);
-        const bpmDisplay = document.getElementById('bpm-display');
-        if (bpmDisplay) bpmDisplay.innerText = `BPM: ${Math.round(config.bpm)}`;
-    };
-});
-
-/* ----------------------------------------------------- */
-/* 5) EXTRA VISUAL PRESENCE (DRAW EXTENSION)              */
-/* ----------------------------------------------------- */
-
-if (typeof draw === 'function') {
-    const _draw = draw;
-    draw = function(){
-        _draw();
-
-        obstacles.forEach(o=>{
-            if(o.decor){
-                ctx.save();
-                ctx.strokeStyle = o.color;
-                ctx.shadowColor = o.color;
-                ctx.shadowBlur = 10;
-                const cw = 450/config.grid;
-                const ch = 350/config.grid;
-                ctx.strokeRect(o.x*cw,o.y*ch,cw,ch);
-                ctx.restore();
-            }
-        });
-    };
-}
-
-})(); 
-</script>
-<!-- ===================================================================== -->
-<!-- === END SAFE ADDITIVE EXTENSION ====================================== -->
-<!-- ===================================================================== -->
-
-
-<!-- ===================================================================== -->
-<!-- === SAFE ADDITIVE EXTENSION: MUSIC ROTATION ENGINE =================== -->
-<!-- ===================================================================== -->
-
-<script>
-(function(){
-
-/* ----------------------------------------------------- */
-/* CONFIGURATION                                         */
-/* ----------------------------------------------------- */
-const ROTATION_BEATS = 32;
-const BPM_DELTAS = [3, 5, 10];
-const BPM_MIN = 60;
-const BPM_MAX = 220;
-const BPM_RAMP_TIME = 2; // seconds
-
-let rotationBeatCounter = 0;
-
-/* ----------------------------------------------------- */
-/* VISUAL FEEDBACK HELPERS                               */
-/* ----------------------------------------------------- */
-function flashBpmDisplay(){
-    const el = document.getElementById('bpm-display');
-    if(!el) return;
-    el.style.boxShadow = '0 0 20px var(--playlist-color)';
-    el.style.borderColor = 'var(--playlist-color)';
-    setTimeout(()=>{
-        el.style.boxShadow = '';
-        el.style.borderColor = 'var(--playlist-color)';
-    },600);
-}
-
-function showRotationHUD(text){
-    if(!window.currentStatus) return;
-    currentStatus = {
-        type: 'rotation',
-        label: text,
-        beats: 8,
-        maxBeats: 8
-    };
-}
-
-/* ----------------------------------------------------- */
-/* MUSIC ROTATION LOGIC                                  */
-/* ----------------------------------------------------- */
-function rotateMusic(){
-
-    /* 1) BPM ROTATION */
-    const delta = BPM_DELTAS[Math.floor(Math.random()*BPM_DELTAS.length)];
-    const sign = Math.random() > 0.5 ? 1 : -1;
-    let targetBpm = config.bpm + delta * sign;
-
-    targetBpm = Math.max(BPM_MIN, Math.min(BPM_MAX, targetBpm));
-
-    config.bpm = targetBpm;
-
-    if (window.Tone && Tone.Transport){
-        Tone.Transport.bpm.rampTo(targetBpm, BPM_RAMP_TIME);
-    }
-
-    const bpmDisplay = document.getElementById('bpm-display');
-    if(bpmDisplay){
-        bpmDisplay.innerText = `BPM: ${Math.round(targetBpm)}`;
-    }
-
-    flashBpmDisplay();
-
-    /* 2) KICK & SNARE ROTATION */
-    const kickTypes = ['deep','tight','electro'];
-    const snareTypes = ['white','brown','pink'];
-
-    config.kickType = kickTypes[Math.floor(Math.random()*kickTypes.length)];
-    config.snareType = snareTypes[Math.floor(Math.random()*snareTypes.length)];
-
-    if(typeof updateKickParams === 'function') updateKickParams();
-    if(window.snare && snare.noise) snare.noise.type = config.snareType;
-
-    /* HUD FEEDBACK */
-    showRotationHUD(`TRACK ROTATION`);
-}
-
-/* ----------------------------------------------------- */
-/* BEAT HOOK (SAFE)                                      */
-/* ----------------------------------------------------- */
-if (window.Tone && Tone.Transport){
-
-    Tone.Transport.scheduleRepeat((time)=>{
-        rotationBeatCounter++;
-
-        if(rotationBeatCounter % ROTATION_BEATS === 0){
-            Tone.Draw.schedule(()=>{
-                rotateMusic();
-            }, time);
-        }
-
-    }, "4n");
-}
-
-})();
-</script>
-
-<!-- ===================================================================== -->
-<!-- === END MUSIC ROTATION ENGINE ======================================= -->
-<!-- ===================================================================== -->
-
-
-<!-- ===================================================================== -->
-<!-- === SAFE ADDITIVE EXTENSION: NPC COLLISION PATCH ===================== -->
-<!-- ===================================================================== -->
-
-<script>
-(function(){
-
-/* ----------------------------------------------------- */
-/* 1) STATE + TOGGLE DEFAULT                             */
-/* ----------------------------------------------------- */
-
-if (typeof config === 'object') {
-    config.npcCollision = true; // default ON
-}
-
-/* ----------------------------------------------------- */
-/* 2) ADD TOGGLE TO DEBUG / SYSTEM MENU                  */
-/* ----------------------------------------------------- */
-
-window.addEventListener('load', () => {
-    const debugPanel = document.getElementById('debug-panel');
-    if (!debugPanel) return;
-
-    const group = document.createElement('div');
-    group.className = 'debug-group';
-    group.innerHTML = `
-        <label>
-            NPC_COLLISION_LOCK
-            <input type="checkbox" checked>
-        </label>
-    `;
-    debugPanel.appendChild(group);
-
-    const checkbox = group.querySelector('input');
-    checkbox.onchange = (e) => {
-        config.npcCollision = e.target.checked;
-    };
-});
-
-/* ----------------------------------------------------- */
-/* 3) NPC–NPC COLLISION CHECK                            */
-/* ----------------------------------------------------- */
-
-function npcOccupied(x, y, selfNpc){
-    return npcs.some(n =>
-        n !== selfNpc &&
-        n.x === x &&
-        n.y === y
-    );
-}
-
-/* ----------------------------------------------------- */
-/* 4) PATCH NPC MOVEMENT (SAFE)                          */
-/* ----------------------------------------------------- */
-
-
-
-/* ----------------------------------------------------- */
-/* 5) ALLOW PLAYER TO PASS THROUGH NPCs                  */
-/* ----------------------------------------------------- */
-
-if (typeof isOccupied === 'function') {
-    const _isOccupied = isOccupied;
-
-    isOccupied = function(x, y){
-        // original collision (walls, decor, bounds)
-        if (_isOccupied(x, y)) return true;
-
-        // ignore NPCs entirely for player movement
-        return false;
-    };
-}
-
-})();
-</script>
-
-<!-- ===================================================================== -->
-<!-- === END NPC COLLISION PATCH ========================================== -->
-<!-- ===================================================================== -->
-
-
-<!-- ===================================================================== -->
-<!-- === SAFE ADDITIVE EXTENSION: MOBILE LAYOUT + TOUCH CONTROLS ========== -->
-<!-- ===================================================================== -->
-
-<style>
-/* 1. RESET PARA MODO MÓVIL - Solo cuando el wrapper existe */
-body:has(#game-master-wrapper) {
-    margin: 0;
-    padding: 0;
-    width: 100vw;
-    height: 100vh;
-    overflow: hidden !important;
-    display: flex;
-    justify-content: center;
-    align-items: flex-start;
-    background: #000;
-    padding-top: 0;
-}
-
-/* 2. EL CONTENEDOR MAESTRO QUE FUERZA EL STANDAR LAYOUT */
-#game-master-wrapper {
-    width: 450px;
-    height: auto;
-    min-height: 100vh;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: flex-start;
-    position: relative;
-    transform-origin: top center;
-    flex-shrink: 0;
-    margin: 0 auto;
-    padding-top: 0;
-}
-
-/* Ajuste de los elementos originales dentro del wrapper */
-#game-master-wrapper #main-view {
-    width: 450px !important;
-    height: auto !important;
-    flex-grow: 0 !important;
-    padding: 0 !important;
-    margin: 0 !important;
-    min-height: auto !important;
-}
-
-/* Mobile view adjustments for HUD elements */
-@media (max-width: 600px) {
-    #bpm-display {
-        font-size: 12px;
-        padding: 4px 8px;
-        top: 10px;
-        right: 10px;
-        left: auto !important;
-        min-width: 70px;
-        max-width: 120px;
-    }
-    #volume-control {
-        top: 35px;
-        left: 5px;
-        padding: 4px 6px;
-        gap: 3px;
-        max-width: 120px;
-        flex-direction: column;
-    }
-    #volume-control label {
-        font-size: 7px;
-    }
-    #volume-control input[type="range"] {
-        width: 100%;
-        height: 3px;
-    }
-    #volume-control input[type="range"]::-webkit-slider-thumb {
-        width: 10px;
-        height: 10px;
-    }
-    #volume-control input[type="range"]::-moz-range-thumb {
-        width: 10px;
-        height: 10px;
-    }
-    .menu-toggle {
-        font-size: 8px;
-        padding: 4px 6px;
-        top: 5px;
-    }
-    #open-appearance { left: 5px; }
-    #open-playlist { left: 100px; }
-    #open-powerups { right: 100px; }
-    #open-debug { right: 5px; }
-    #touch-toggle-btn {
-        top: 35px;
-        right: 5px;
-        font-size: 10px;
-        padding: 6px 10px;
-    }
-    .side-panel {
-        width: 100vw;
-        max-width: 100vw;
-    }
-}
-
-/* 3. BOTÓN TOGGLE */
-#touch-toggle-btn {
-    position: fixed;
-    top: 120px;
-    right: 20px;
-    padding: 10px 15px;
-    background: rgba(0, 0, 0, 0.9);
-    border: 2px solid #0ff;
-    border-radius: 8px;
-    color: #0ff;
-    font-family: 'Courier New', Courier, monospace;
-    font-size: 12px;
-    font-weight: bold;
-    cursor: pointer;
-    z-index: 1001;
-    box-shadow: 0 0 10px rgba(0, 255, 255, 0.4);
-    white-space: nowrap;
-}
-
-#touch-toggle-btn.active {
-    background: #0ff;
-    color: #000;
-}
-
-/* 4. PANEL TÁCTIL INTEGRADO AL LAYOUT */
-#touch-panel {
-    display: none; 
-    width: 100%;
-    height: 220px;
-    position: relative;
-    margin-top: 20px;
-    touch-action: none;
-}
-
-.tp-btn {
-    position: absolute;
-    width: 75px;
-    height: 75px;
-    background: #111;
-    border: 3px solid #0ff;
-    border-radius: 50%;
-    color: #0ff;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 32px;
-    user-select: none;
-    touch-action: none;
-    box-shadow: 0 0 15px rgba(0, 255, 255, 0.2);
-}
-
-.tp-btn:active {
-    background: #0ff;
-    color: #000;
-    transform: scale(0.9);
-}
-
-/* CRUZ DE CONTROL */
-.tp-up    { top: 0; left: 50%; transform: translateX(-50%); }
-.tp-down  { bottom: 0; left: 50%; transform: translateX(-50%); }
-.tp-left  { left: 20%; top: 50%; transform: translateY(-50%); }
-.tp-right { right: 20%; top: 50%; transform: translateY(-50%); }
-
-</style>
-
-<script>
-(function() {
-    // 1. Envolver el contenido original en el Scaler - Solo en móviles
-    const isMobile = window.innerWidth <= 600 || /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-    
-    let wrapper = document.getElementById('game-master-wrapper');
-    if (!wrapper && isMobile) {
-        wrapper = document.createElement('div');
-        wrapper.id = 'game-master-wrapper';
-        const mainView = document.getElementById('main-view');
-        if (mainView && mainView.parentNode) {
-            mainView.parentNode.insertBefore(wrapper, mainView);
-            wrapper.appendChild(mainView);
-        }
-    }
-    
-    // Si no es móvil o no se creó el wrapper, no continuar
-    if (!wrapper) {
-        return;
-    }
-
-    // 2. Crear el Botón Toggle
-    const toggleBtn = document.createElement('button');
-    toggleBtn.id = 'touch-toggle-btn';
-    toggleBtn.innerText = 'MOBILE: OFF';
-    document.body.appendChild(toggleBtn);
-
-    // 3. Crear el Panel Táctil dentro del Wrapper (debajo del juego)
-    const panel = document.createElement('div');
-    panel.id = 'touch-panel';
-    panel.innerHTML = `
-        <div class="tp-btn tp-up">▲</div>
-        <div class="tp-btn tp-down">▼</div>
-        <div class="tp-btn tp-left">◀</div>
-        <div class="tp-btn tp-right">▶</div>
-    `;
-    wrapper.appendChild(panel);
-
-    // 4. Lógica de Escalado Dinámico - Solo cuando el panel táctil está activo
-    function applyScaling() {
-        const isMobileMode = panel.style.display === 'block';
-        if (!isMobileMode) {
-            wrapper.style.transform = 'none';
-            wrapper.style.width = '450px';
-            wrapper.style.height = 'auto';
-            wrapper.style.transformOrigin = 'top center';
-            return;
-        }
-        
-        const targetW = 450;
-        const targetH = 850;
-        const winW = window.innerWidth;
-        const winH = window.innerHeight;
-        
-        // Calcular escala pero mantener el contenido visible desde el inicio
-        const scale = Math.min(winW / targetW, winH / targetH) * 0.95;
-        wrapper.style.transform = `scale(${scale})`;
-        wrapper.style.transformOrigin = 'top center';
-    }
-
-    window.addEventListener('resize', applyScaling);
-    // No aplicar escalado inicialmente, solo cuando se active modo móvil
-    applyScaling();
-
-    // 5. Función Toggle + Fullscreen
-    toggleBtn.onclick = async () => {
-        const isActivating = (panel.style.display === '' || panel.style.display === 'none');
-        
-        if (isActivating) {
-            // Ocultar elementos HUD innecesarios en modo móvil
-            const volumeControl = document.getElementById('volume-control');
-            const bpmDisplay = document.getElementById('bpm-display');
-            const menuButtons = document.querySelectorAll('.menu-toggle');
-            
-            if (volumeControl) volumeControl.style.display = 'none';
-            if (bpmDisplay) bpmDisplay.style.display = 'none';
-            menuButtons.forEach(btn => btn.style.display = 'none');
-            
-            // Intentar entrar en pantalla completa
-            try {
-                const docEl = document.documentElement;
-                if (docEl.requestFullscreen) await docEl.requestFullscreen();
-                else if (docEl.webkitRequestFullscreen) await docEl.webkitRequestFullscreen();
-                else if (docEl.mozRequestFullScreen) await docEl.mozRequestFullScreen();
-                else if (docEl.msRequestFullscreen) await docEl.msRequestFullscreen();
-            } catch (e) { console.log("Fullscreen blocked"); }
-            
-            panel.style.display = 'block';
-            toggleBtn.innerText = 'MOBILE: ON';
-        } else {
-            // Restaurar elementos HUD al salir de modo móvil
-            const volumeControl = document.getElementById('volume-control');
-            const bpmDisplay = document.getElementById('bpm-display');
-            const menuButtons = document.querySelectorAll('.menu-toggle');
-            
-            if (volumeControl) volumeControl.style.display = '';
-            if (bpmDisplay) bpmDisplay.style.display = '';
-            menuButtons.forEach(btn => btn.style.display = '');
-            
-            if (document.exitFullscreen) document.exitFullscreen().catch(()=> {});
-            else if (document.webkitExitFullscreen) document.webkitExitFullscreen().catch(()=> {});
-            else if (document.mozCancelFullScreen) document.mozCancelFullScreen().catch(()=> {});
-            else if (document.msExitFullscreen) document.msExitFullscreen().catch(()=> {});
-            
-            panel.style.display = 'none';
-            toggleBtn.innerText = 'MOBILE: OFF';
-        }
-        
-        toggleBtn.classList.toggle('active');
-        setTimeout(applyScaling, 300); // Re-ajustar tras cambio de UI
-    };
-    
-    // Manejar salida de pantalla completa por otros medios
-    const handleFullscreenChange = () => {
-        const isFullscreen = !!(document.fullscreenElement || document.webkitFullscreenElement || 
-                                document.mozFullScreenElement || document.msFullscreenElement);
-        if (!isFullscreen) {
-            // Restaurar elementos si se sale de pantalla completa
-            const volumeControl = document.getElementById('volume-control');
-            const bpmDisplay = document.getElementById('bpm-display');
-            const menuButtons = document.querySelectorAll('.menu-toggle');
-            const panel = document.getElementById('touch-panel');
-            
-            if (panel && panel.style.display === 'block') {
-                if (volumeControl) volumeControl.style.display = '';
-                if (bpmDisplay) bpmDisplay.style.display = '';
-                menuButtons.forEach(btn => btn.style.display = '');
-                panel.style.display = 'none';
-                toggleBtn.innerText = 'MOBILE: OFF';
-                toggleBtn.classList.remove('active');
-            }
-        }
-    };
-    
-    document.addEventListener('fullscreenchange', handleFullscreenChange);
-    document.addEventListener('webkitfullscreenchange', handleFullscreenChange);
-    document.addEventListener('mozfullscreenchange', handleFullscreenChange);
-    document.addEventListener('MSFullscreenChange', handleFullscreenChange);
-
-    // 6. Lógica de Teclas (Mapping)
-    const keyMap = {
-        'tp-up': 'ArrowUp',
-        'tp-down': 'ArrowDown',
-        'tp-left': 'ArrowLeft',
-        'tp-right': 'ArrowRight'
-    };
-
-    panel.querySelectorAll('.tp-btn').forEach(btn => {
-        const key = keyMap[btn.classList[1]];
-        
-        const triggerEvent = (type) => {
-            window.dispatchEvent(new KeyboardEvent(type, {
-                key: key,
-                keyCode: (key === 'ArrowUp' ? 38 : key === 'ArrowDown' ? 40 : key === 'ArrowLeft' ? 37 : 39),
-                bubbles: true
-            }));
-        };
-
-        btn.addEventListener('touchstart', (e) => { e.preventDefault(); triggerEvent('keydown'); }, {passive: false});
-        btn.addEventListener('touchend', (e) => { e.preventDefault(); triggerEvent('keyup'); }, {passive: false});
-    });
-
-    // Bloquear gestos del sistema
-    document.addEventListener('touchstart', (e) => {
-        if (e.touches.length > 1) e.preventDefault();
-    }, { passive: false });
-
-})();
-</script>
-
-<!-- ===================================================================== -->
-<!-- === END FINAL MOBILE LAYOUT SYSTEM ================================== -->
-<!-- ===================================================================== -->
-
-
-<script>
-(function() {
-    /* 1. MAPEO SIMPLIFICADO (SOLO HORIZONTAL) */
-    const skinOrientations = {
-        '(⌐■_■)': { 'ArrowLeft': '<(■_■ )', 'ArrowRight': '( ■_■)>' },
-        '(^o^)':   { 'ArrowLeft': '<(^o^ )', 'ArrowRight': '( ^o^)>' },
-        '(◕‿◕)':   { 'ArrowLeft': '<(◕‿◕ )', 'ArrowRight': '( ◕‿◕)>' },
-        'd(-_-)b': { 'ArrowLeft': '<d(-_-)',  'ArrowRight': '(-_-)b>' }
-    };
-
-    /* 2. CAPTURA DE DIRECCIÓN (SOLO SI ES IZQUIERDA O DERECHA) */
-    window.addEventListener('keydown', (e) => {
-        // Solo actualizamos la orientación si el movimiento es horizontal
-        if(e.key === "ArrowLeft" || e.key === "ArrowRight") {
-            player.lastDir = e.key;
-        }
-        // Si es Arriba o Abajo, no hacemos nada, conservando la dirección anterior
-    }, { capture: true });
-
-    /* 3. INYECCIÓN EN EL MOTOR DE DIBUJO (DRAW) */
-    if (typeof draw === 'function') {
-        const _originalDraw = draw;
-        draw = function() {
-            _originalDraw(); 
-
-            const cw = 450/config.grid, ch = 350/config.grid;
-            
-            // Redibujar Corral Cian Neón (Mantenemos la mejora visual)
-            ctx.fillStyle = 'rgba(0, 255, 255, 0.15)';
-            ctx.fillRect(blueZone.x*cw, blueZone.y*ch, blueZone.w*cw, blueZone.h*ch);
-            ctx.strokeStyle = '#00ffff';
-            ctx.lineWidth = 3;
-            ctx.strokeRect(blueZone.x*cw, blueZone.y*ch, blueZone.w*cw, blueZone.h*ch);
-
-            // SOBRE-DIBUJAR AL JUGADOR
-            ctx.fillStyle = "#000"; 
-            ctx.fillRect(player.x*cw, player.y*ch, cw, ch); 
-
-            if(appearance.playerGlow) { 
-                ctx.fillStyle="rgba(0,255,0,0.15)"; 
-                ctx.fillRect(player.x*cw, player.y*ch, cw, ch); 
-            }
-
-            const baseSkin = appearance.avatar;
-            // Si hay una orientación horizontal guardada, la usamos. Si no, el skin base.
-            const orientedChar = (skinOrientations[baseSkin] && player.lastDir) 
-                ? skinOrientations[baseSkin][player.lastDir] 
-                : baseSkin;
-
-            ctx.fillStyle = "#0f0";
-            ctx.font = `${ch}px Courier`;
-            ctx.textAlign = "center";
-            ctx.fillText(orientedChar, (player.x + 0.5) * cw, (player.y + 0.9) * ch);
-        };
-    }
-
-    /* 4. MEJORA DE COLORES DE MUEBLES */
-    if (typeof generarLayout === 'function') {
-        const _originalGen = generarLayout;
-        generarLayout = function() {
-            _originalGen();
-            if(typeof obstacles !== 'undefined') {
-                obstacles.forEach(o => {
-                    if(o.char === 'TTT') o.color = '#FF71CE'; 
-                    if(o.char === '┬─┬') o.color = '#FFFB00'; 
-                });
-            }
-        };
-        generarLayout();
-    }
-})();
-</script>
-
-
 </body>
-
 </html>
-
-
-
-
-
-
