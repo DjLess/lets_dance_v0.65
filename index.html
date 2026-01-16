@@ -590,22 +590,61 @@
         let isFullscreen = false;
 
         // --- INITIALIZATION ---
-        window.onload = () => {
-            canvas = document.getElementById('zona-juego');
-            ctx = canvas.getContext('2d');
-            Object.keys(PU_TYPES).forEach(id => {
-                puConfig[id] = { effect: PU_TYPES[id].def, rate: 15, dur: 16, last: Date.now(), enabled: true };
-            });
-            renderPreGameMenu();
-            initPowerUpMenu();
-            generarLayout();
-            reiniciarEscena();
-            
-            // INICIALIZAR CONTROLES MÓVILES
-            initMobileControls();
-            
-            requestAnimationFrame(draw);
+        
+
+
+
+
+
+// --- SISTEMA DE CARGA COMPATIBLE CON ARCHIVOS LOCALES ---
+function cargarParcheExterno() {
+    return new Promise((resolve) => {
+        const script = document.createElement('script');
+        script.src = 'patch_extension.js';
+        
+        // Si el archivo carga con éxito
+        script.onload = () => {
+            console.log("✅ Parche externo aplicado con éxito.");
+            resolve();
         };
+
+        // Si el archivo no existe o hay error de seguridad
+        script.onerror = () => {
+            console.warn("⚠️ No se pudo cargar patch_extension.js (puede que no exista). Usando configuración base.");
+            resolve();
+        };
+
+        document.head.appendChild(script);
+    });
+}
+
+// Reemplazo del window.onload para que espere al parche
+window.onload = async () => {
+    // 1. Intentar inyectar el script
+    await cargarParcheExterno();
+
+    // 2. Inicialización normal del juego
+    canvas = document.getElementById('zona-juego');
+    ctx = canvas.getContext('2d');
+    
+    // Inicializar Power-ups (usando PU_TYPES que viene del HTML base)
+    Object.keys(PU_TYPES).forEach(id => {
+        puConfig[id] = { effect: PU_TYPES[id].def, rate: 15, dur: 16, last: Date.now(), enabled: true };
+    });
+
+    renderPreGameMenu();
+    initPowerUpMenu();
+    generarLayout();
+    reiniciarEscena();
+    initMobileControls();
+    requestAnimationFrame(draw);
+};
+
+
+
+
+
+
 
         // --- AUDIO ENGINE ---
         function updateKickParams() {
