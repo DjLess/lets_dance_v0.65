@@ -114,36 +114,29 @@
 
     createHelpBtn();
 
-function clearInternalWalls() {
-        if (typeof grid !== 'undefined' && typeof gridW !== 'undefined') {
+    function clearInternalWalls() {
+        if (typeof grid !== 'undefined' && typeof gridW !== 'undefined' && typeof gridH !== 'undefined') {
             console.log("🧹 Limpiando obstáculos internos del mapa...");
             for (let y = 1; y < gridH - 1; y++) {
                 for (let x = 1; x < gridW - 1; x++) {
-                    // Si el valor es 1 (pared), lo convertimos en 0 (suelo libre)
                     if (grid[y][x] === 1) {
                         grid[y][x] = 0;
                     }
                 }
             }
         }
+    }
 
-// --- 2. CONFIGURACIÓN LÁSER DINÁMICA (CORREGIDA) ---
+    // --- 2. CONFIGURACIÓN LÁSER DINÁMICA ---
     let lastBeatChecked = -1;
 
     window.drawLasersBehindDJ = function() {
-        if (!appearance.lasers || !isStarted) return;
+        if (typeof appearance === 'undefined' || !appearance.lasers || !window.isStarted) return;
 
-        // LÓGICA DE CAMBIO CADA 16 BEATS
         if (typeof djStep !== 'undefined' && djStep % 16 === 0 && djStep !== lastBeatChecked) {
             lastBeatChecked = djStep;
-            
-            // Variación aleatoria de fuentes (1 a 3)
             appearance.laserSourceCount = Math.floor(Math.random() * 3) + 1;
-            
-            // Si hay 1 sola fuente, forzamos 1 solo rayo (no abanico)
-            // Si hay más de 1, permitimos el abanico de 5 para llenar la pista
             appearance.laserBeamCount = (appearance.laserSourceCount === 1) ? 1 : 5;
-            
             console.log(`📡 Beat ${djStep}: Fuentes: ${appearance.laserSourceCount}, Rayos: ${appearance.laserBeamCount}`);
         }
 
@@ -159,7 +152,6 @@ function clearInternalWalls() {
             const xSrc = s * spacing;
             const ySrc = 40; 
             
-            // Dibujamos según la cantidad de rayos definida (1 o 5)
             for (let i = 0; i < appearance.laserBeamCount; i++) {
                 ctx.beginPath();
                 ctx.strokeStyle = appearance.laserColorMode === 'magenta' ? '#ff00ff' : '#00ffff';
@@ -168,10 +160,8 @@ function clearInternalWalls() {
                 
                 let tx;
                 if (appearance.laserBeamCount === 1) {
-                    // Movimiento de un solo rayo central
                     tx = xSrc + Math.sin(time + s) * 150;
                 } else {
-                    // Movimiento en abanico (solo cuando hay 2 o 3 fuentes)
                     tx = xSrc + Math.sin(time + s) * 180 + (i * 40 - 80);
                 }
                 
@@ -185,7 +175,6 @@ function clearInternalWalls() {
     // --- 3. SINCRONIZACIÓN FORZADA ---
     function syncV15Settings() {
         if (typeof appearance !== 'undefined') {
-            // FORZAR VALORES INICIALES PARA 1 SOLO RAYO
             appearance.lasers = true;
             appearance.laserSourceCount = 1;
             appearance.laserBeamCount = 1; 
@@ -196,7 +185,6 @@ function clearInternalWalls() {
             appearance.scanlines = true;
             appearance.particles = false;
 
-            // Actualizar visualmente los toggles del panel
             const toggles = {
                 'check-lasers': true,
                 'check-glow': true,
@@ -217,13 +205,127 @@ function clearInternalWalls() {
     // --- 4. RENDER E INICIALIZACIÓN ---
     const originalRender = window.render;
     window.render = function() {
-        drawLasersBehindDJ();
+        if (window.drawLasersBehindDJ) window.drawLasersBehindDJ();
         if (originalRender) originalRender();
     };
-
+	
     setTimeout(() => {
         syncV15Settings();
+        clearInternalWalls();
         console.log("✅ Sistema sincronizado: Iniciando con 1 solo láser.");
     }, 1000);
 
+
+/**
+ * --- MONITOR TOTAL 2777: FULL STATE EXPORTER ---
+ * Captura variables de JS y estados físicos del DOM (Sliders, Toggles, Selects).
+ */
+(function() {
+    console.log("🛠️ Monitor de Estado Total 2777 activado. Capturando cada sensor...");
+
+    function getAbsoluteState(eventSource) {
+        // 1. Captura de Inputs del DOM (Lo que ves en pantalla)
+        const domControls = {};
+        document.querySelectorAll('input, select').forEach(el => {
+            const key = el.id || el.name || el.className || 'unnamed';
+            if (el.type === 'checkbox') {
+                domControls[key] = el.checked;
+            } else if (el.type === 'range' || el.tagName === 'SELECT') {
+                domControls[key] = isNaN(el.value) ? el.value : parseFloat(el.value);
+            }
+        });
+
+        // 2. Construcción del Reporte Maestro
+        const fullState = {
+            meta: {
+                timestamp: new Date().toLocaleTimeString(),
+                trigger: eventSource,
+                club_status: "ACTIVE_SESSION"
+            },
+            // Variables de apariencia y efectos
+            visuals: typeof appearance !== 'undefined' ? { ...appearance } : "N/A",
+            // Audio y Sliders de control de ritmo
+            audio_engine: {
+                bpm: typeof bpm !== 'undefined' ? bpm : "N/A",
+                volume: typeof volume !== 'undefined' ? volume : "N/A",
+                master: typeof masterVolume !== 'undefined' ? masterVolume : "N/A",
+                is_started: typeof isStarted !== 'undefined' ? isStarted : false
+            },
+            // Estructura del mapa y mundo
+            world_data: {
+                grid: (typeof gridW !== 'undefined') ? { width: gridW, height: gridH } : "N/A",
+                club_size: typeof club_size !== 'undefined' ? club_size : "N/A",
+                player_pos: typeof player !== 'undefined' ? { x: player.x, y: player.y } : "N/A"
+            },
+            // Captura física de la Interfaz (Toggles y Dropdowns)
+            ui_controls: domControls,
+            // Identidad visual inalterable del parche
+            patch_identity: {
+                colors: ["#00ffff", "#ff00ff"],
+                version: "2777-RPG-v18"
+            }
+        };
+
+        console.log(`%c⚡ REPORTE TOTAL 2777: ${eventSource}`, "color:#00ffff; font-weight:bold; background:#000; padding:2px 5px; border:1px solid #00ffff;");
+        console.log(fullState);
+        
+        // Bonus: Copiar al portapapeles automáticamente si es un cambio manual
+        if (eventSource.includes("Control")) {
+            console.log("%c💡 Tip: El objeto está listo en la variable global 'lastState' para inspección profunda.", "color:#ff00ff;");
+            window.lastState = fullState;
+        }
+    }
+
+    // Listener para CUALQUIER cambio en la interfaz
+    document.addEventListener('change', (e) => {
+        const name = e.target.id || e.target.tagName;
+        getAbsoluteState(`Control Alterado: ${name}`);
+    });
+
+    // Reporte tras carga inicial para verificar sincronización forzada
+    setTimeout(() => getAbsoluteState("Sincronización de Inicio"), 2000);
 })();
+})();
+
+
+// --- INYECCIÓN DE DANCERS ADICIONALES (PARCHE 2777) ---
+(function() {
+    console.log("%c🕺 Inyectando 20 Dancers adicionales en la pista...", "color:#ff00ff; font-weight:bold;");
+
+    function inyectarMasDancers() {
+        if (typeof dancers === 'undefined' || typeof config === 'undefined') return;
+
+        const EXTRAS = 20; // Cantidad solicitada
+        let inyectados = 0;
+        let intentos = 0;
+
+        while (inyectados < EXTRAS && intentos < 200) {
+            let dx = Math.floor(Math.random() * config.grid);
+            let dy = Math.floor(Math.random() * config.grid);
+
+            // Validar que el espacio esté vacío en el MAPA ESTRUCTURAL
+            // Si MAPA_ESTRUCTURAL[dy][dx] es 0, es suelo caminable
+            if (window.MAPA_ESTRUCTURAL && window.MAPA_ESTRUCTURAL[dy] && window.MAPA_ESTRUCTURAL[dy][dx] === 0) {
+                dancers.push({
+                    x: dx,
+                    y: dy,
+                    state: Math.random() > 0.5 ? 0 : 1 // Alterna entre skins de baile
+                });
+                inyectados++;
+            }
+            intentos++;
+        }
+        console.log(`%c✅ ¡Fiesta ampliada! Se han sumado ${inyectados} dancers a la pista.`, "color:#00ffff;");
+    }
+
+    // Ejecutar después de que el sistema base termine su inicialización
+    setTimeout(inyectarMasDancers, 2500);
+
+    // También lo vinculamos al botón de reset para que no se pierdan al reiniciar
+    const originalReset = window.reiniciarEscena;
+    window.reiniciarEscena = function() {
+        if (originalReset) originalReset();
+        setTimeout(inyectarMasDancers, 500);
+    };
+})();
+
